@@ -38,13 +38,23 @@ function resolveNodeInstallPrefix(opencodeBinary: string): string {
   return path.resolve(opencodeBinary, "..", "..");
 }
 
-test("local OpenCode runtime exposes npm-module plugin installation", async () => {
-  const fixture = await loadFixture();
+function resolveOpencodeBinary(): string | null {
   const which = run("which", ["opencode"]);
-  assert.equal(which.status, 0);
+  if (which.status !== 0) {
+    return null;
+  }
 
   const opencodePath = which.stdout.trim();
-  assert.ok(opencodePath.length > 0, "opencode binary should resolve in PATH");
+  return opencodePath.length > 0 ? opencodePath : null;
+}
+
+test("local OpenCode runtime exposes npm-module plugin installation", async (t) => {
+  const fixture = await loadFixture();
+  const opencodePath = resolveOpencodeBinary();
+  if (!opencodePath) {
+    t.skip("opencode binary is not available in PATH for this environment");
+    return;
+  }
 
   const help = runShell("opencode --help 2>&1");
   assert.equal(help.status, 0);
@@ -73,12 +83,14 @@ test("local OpenCode runtime exposes npm-module plugin installation", async () =
   }
 });
 
-test("unsupported local plugin seam is detected when required artifact is missing", async () => {
+test("unsupported local plugin seam is detected when required artifact is missing", async (t) => {
   const fixture = await loadFixture();
-  const which = run("which", ["opencode"]);
-  assert.equal(which.status, 0);
+  const opencodePath = resolveOpencodeBinary();
+  if (!opencodePath) {
+    t.skip("opencode binary is not available in PATH for this environment");
+    return;
+  }
 
-  const opencodePath = which.stdout.trim();
   const nodePrefix = resolveNodeInstallPrefix(opencodePath);
   const pluginRoot = path.join(nodePrefix, "lib", "node_modules", fixture.pluginModule);
   const missingArtifact = path.join(pluginRoot, "dist", "definitely-missing-artifact.js");
