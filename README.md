@@ -1,26 +1,145 @@
 # opencode-with-claude
 
-OpenCode **provider-layer** Claude CLI integration with workflow state adapters (HTTP + MCP) and an optional plugin subpath for local OpenCode workflow tools.
+Claude CLI provider and workflow surfaces for OpenCode.
 
-## Install
+This package gives you two things:
 
-For a new project:
+- a `with-claude/*` provider that runs through the local **Claude CLI**
+- bundled OpenCode subagents and command prompts for `@planClaude`, `@implClaude`, and `@reviewClaude`
+
+## Quick start
+
+### For humans
 
 ```bash
 npx opencode-with-claude install
 ```
 
-This installer:
+### For LLM agents
 
-- creates `.opencode/opencode-with-claude.jsonc`
-- copies bundled Claude subagent and command prompt files into `.opencode/`
-- creates a baseline `opencode.jsonc` if one does not already exist
+Tell the agent to run:
 
-If `opencode.jsonc` already exists, the installer preserves it and writes `opencode-with-claude.snippet.jsonc` for manual merge.
+```bash
+npx opencode-with-claude install
+```
+
+## What the installer does
+
+The installer sets up the minimum files needed for this package inside the current project.
+
+It will:
+
+- create `.opencode/opencode-with-claude.jsonc`
+- copy bundled Claude subagent prompts into `.opencode/agents/`
+- copy bundled reusable command prompts into `.opencode/command/`
+- create `opencode.jsonc` if the project does not already have one
+
+If `opencode.jsonc` already exists, the installer does **not** overwrite it. Instead, it writes:
+
+```text
+opencode-with-claude.snippet.jsonc
+```
+
+so you can merge the provider/agent block manually.
+
+## Prerequisites
+
+- Node.js 22+
+- OpenCode installed and available in your environment
+- Claude CLI installed and available as `claude`
+
+If Claude CLI is installed somewhere else, update the generated config accordingly.
+
+## What you get
+
+### Provider models
+
+The package exposes these provider-backed models:
+
+- `with-claude/haiku`
+- `with-claude/sonnet`
+- `with-claude/opus`
+
+### Claude subagents
+
+The package installs these OpenCode subagents:
+
+- `@planClaude`
+- `@implClaude`
+- `@reviewClaude`
+
+Use them from the OpenCode UI / TUI through mention-style invocation.
+
+```text
+@planClaude
+@implClaude
+@reviewClaude
+```
+
+These are **subagents**, not primary agents. That means:
+
+- valid: mention-style subagent usage in OpenCode
+- invalid: `opencode run --agent planClaude ...` as a direct primary replacement
+
+## Saved files
+
+Plan artifacts are saved automatically by the workflow tool path.
+
+Current behavior:
+
+- if `<workspaceRoot>/.sisyphus/plans` exists:
+  - save to `.sisyphus/plans/plan-v<revision>.md`
+- otherwise:
+  - save to `plans/plan-v<revision>.md`
+
+Other workflow artifacts still use `.omd/plan/<taskId>/...`.
+
+## Config files
+
+### `opencode.jsonc`
+
+This is the project-level OpenCode config.
+
+It connects:
+
+- the `with-claude` provider
+- the three Claude subagents
+
+### `.opencode/opencode-with-claude.jsonc`
+
+This is the user-editable Claude role config.
+
+Use it to change:
+
+- role model selection
+- Claude CLI arguments
+- timeouts and related runtime options
+
+## Package surfaces
+
+This package exposes two runtime surfaces:
+
+- package root: provider factory (`createWithClaude`)
+- `./plugin`: OpenCode workflow tools/state surface
+
+## Development
+
+```bash
+npm install
+npm run build
+npm test
+```
+
+Useful scripts:
+
+- `npm run dev`
+- `npm run dev:mcp`
+- `npm run build`
+- `npm test`
 
 ## Package contents
 
-The published package is intended to ship only the runtime/provider surfaces and bundled OpenCode prompt assets:
+The published tarball intentionally ships only runtime/package assets:
 
 - `dist/`
 - `.opencode/agents/`
@@ -29,78 +148,24 @@ The published package is intended to ship only the runtime/provider surfaces and
 - `README.md`
 - `.env.example`
 
-Project-local files like `opencode.jsonc`, `Plan/`, `data-*`, `src/`, and tests are development assets and are not intended to be part of the npm tarball.
+Project-local development files such as `src/`, `Plan/`, `data-*`, and local config are not part of the intended install surface.
 
-## What exists now
+## Notes
 
-- Claude CLI-backed provider package at the package root (`src/provider/*`)
-- Optional plugin subpath (`./plugin`) for workflow tools/state access
-- Express HTTP API for task lifecycle control
-- Persistent JSON-backed shared task store
-- MCP stdio server for workflow-state tools
-- OpenCode-native subagents under `.opencode/agents/`
-- OpenCode-native reusable commands under `.opencode/command/`
+- The package uses **Claude CLI**, not the Claude API.
+- The provider runtime is the main long-term execution path.
+- The bundled commands are designed to delegate into the Claude subagents instead of free-typing in the current primary agent.
 
-## Scripts
+## Uninstall
 
-- `npm run dev` — start HTTP app in watch mode
-- `npm run dev:mcp` — start MCP stdio server in watch mode
-- `npm run build` — compile TypeScript
+Remove the installed files from your project:
 
-## OpenCode-native command surface
-
-Reusable custom prompts now live under:
-
+- `.opencode/opencode-with-claude.jsonc`
+- `.opencode/agents/implClaude.md`
+- `.opencode/agents/planClaude.md`
+- `.opencode/agents/reviewClaude.md`
 - `.opencode/command/implClaude.md`
 - `.opencode/command/planClaude.md`
 - `.opencode/command/reviewClaude.md`
 
-Subagents intended for the `@` picker now live under:
-
-- `.opencode/agents/implClaude.md`
-- `.opencode/agents/planClaude.md`
-- `.opencode/agents/reviewClaude.md`
-
-Project-level OpenCode config now declares:
-
-- the `with-claude` provider at the package root
-- agent discovery for `@implClaude`, `@planClaude`, `@reviewClaude`
-
-The package is now split into two surfaces:
-
-- **provider root**: Claude CLI-backed model execution (`with-claude/haiku`, `with-claude/sonnet`, `with-claude/opus`)
-- **plugin subpath**: workflow tools/state surface
-
-Actual Claude role customization now lives in `.opencode/opencode-with-claude.jsonc`, where the provider-backed roles use our own Claude CLI runner configuration. Choose Haiku / Sonnet / Opus there as Claude CLI model aliases.
-
-In the current transition state, OpenCode-facing agents still exist as wrappers over workflow tools, but the target direction is provider-first execution.
-
-The standalone CLI surface has been removed; the intended interactive surface is now OpenCode + plugin/commands.
-
-## Notes
-
-- The HTTP server and MCP server are separate entrypoints that share the same task-store/orchestrator code.
-- This keeps one codebase and one shared state model while respecting MCP stdio runtime constraints.
-- The HTTP adapter now mirrors the plugin semantics: `POST /tasks` creates a draft only, and approval is explicit rather than auto-triggering implementation/review.
-
-### Claude CLI role configuration
-
-The actual Claude role configuration now lives in:
-
-- `.opencode/opencode-with-claude.jsonc`
-
-This file controls the internal Claude CLI runner for provider-backed role execution:
-
-- `run_claude_plan`
-- `run_claude_implementation`
-- `run_claude_review`
-
-It is where users choose:
-
-- Claude Haiku / Sonnet / Opus aliases
-- role-specific CLI args
-- timeout settings
-
-The provider-backed models are intended to be the long-term path for `@planClaude`, `@implClaude`, and `@reviewClaude` style usage.
-
-New tasks now start in `draft_plan` and only move to `awaiting_approval` after a plan is successfully saved.
+If you created a project-level `opencode.jsonc` through the installer, remove or edit the `with-claude` provider and Claude subagent entries manually.

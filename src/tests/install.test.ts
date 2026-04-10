@@ -35,3 +35,8 @@ test("installer preserves existing opencode.jsonc and writes a merge snippet", a
   assert.match(output, /Existing opencode\.jsonc preserved/);
   assert.match(snippet, /"with-claude"/);
 });
+
+test("built installer entrypoint keeps a node shebang", async () => {
+  const builtInstaller = await readFile(path.join(process.cwd(), "dist", "cli.js"), "utf8");
+  assert.match(builtInstaller, /^#!\/usr\/bin\/env node/);
+});

@@ -139,8 +139,8 @@ export async function installOpenCodeWithClaude(options: InstallOptions): Promis
   ].join("\n");
 }
 
-async function main(): Promise<void> {
-  const args = process.argv.slice(2);
+export async function main(argv = process.argv.slice(2)): Promise<void> {
+  const args = argv;
   if (args.length === 0 || args[0] !== "install") {
     console.error("Usage: opencode-with-claude install [--cwd <path>] [--force]");
     process.exitCode = 1;
@@ -150,8 +150,4 @@ async function main(): Promise<void> {
   const options = parseArgs(args);
   const result = await installOpenCodeWithClaude(options);
   process.stdout.write(`${result}\n`);
-}
-
-if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
-  void main();
 }
