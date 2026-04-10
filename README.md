@@ -15,6 +15,28 @@ This package gives you two things:
 npx @little_tale/opencode-with-claude install
 ```
 
+## Automatic npm publishing
+
+This repo includes a GitHub Actions workflow that publishes the package automatically after the `CI` workflow succeeds on `main`.
+
+Important release behavior:
+
+- the workflow only publishes when the `package.json` version is not already on npm
+- if the version already exists, the workflow exits cleanly and skips publishing
+- publishing uses npm trusted publishing (`id-token: write`) instead of a long-lived npm token
+
+One-time npm setup is still required on the npm website:
+
+1. publish `@little_tale/opencode-with-claude` once manually, or create the package/trusted publisher entry on npm
+2. add this GitHub repository as a trusted publisher for the package
+3. keep the package `repository.url` pointed at `https://github.com/Little-tale/WithClaude`
+
+After that, releasing a new version is just:
+
+1. bump `package.json` version in a PR
+2. merge the PR to `main`
+3. let GitHub Actions publish the new version automatically
+
 ### For LLM agents
 
 Tell the agent to run:

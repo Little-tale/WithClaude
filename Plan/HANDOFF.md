@@ -426,12 +426,17 @@ The package has moved from "local project experiment" toward a distributable ins
 - `package.json`
   - `name = @little_tale/opencode-with-claude`
   - `private: false`
+  - `repository.url = git+https://github.com/Little-tale/WithClaude.git`
   - `publishConfig.access = "public"`
   - `bin.opencode-with-claude = ./dist/cli.js`
   - `prepack = npm run build`
   - `files` whitelist limits the npm tarball to package/runtime assets
 - `.npmignore`
   - present so npm does not fall back to `.gitignore` and accidentally drop `dist/`
+- `.github/workflows/publish-npm.yml`
+  - publishes automatically after `CI` succeeds on `main`
+  - skips cleanly if the current package version is already published
+  - uses npm trusted publishing permissions (`id-token: write`) instead of a long-lived npm token
 
 ### Installer behavior (current truth)
 
@@ -494,6 +499,11 @@ Observed output:
   - `.opencode/opencode-with-claude.jsonc`
   - `.opencode/agents/*.md`
   - `.opencode/command/*.md`
+
+Auto-publish workflow verification:
+
+- `npm publish --dry-run --access public` succeeds for the current package name
+- actual `npm publish` now fails with `You cannot publish over the previously published versions: 0.1.0` when retried on the same version, which is the expected registry behavior and exactly what the workflow now guards against
 
 ### README status
 
