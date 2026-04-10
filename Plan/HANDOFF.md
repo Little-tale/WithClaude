@@ -424,7 +424,7 @@ The package has moved from "local project experiment" toward a distributable ins
 ### Current package state
 
 - `package.json`
-  - `name = @little-tale/opencode-with-claude`
+  - `name = @little_tale/opencode-with-claude`
   - `private: false`
   - `publishConfig.access = "public"`
   - `bin.opencode-with-claude = ./dist/cli.js`
@@ -440,7 +440,7 @@ The installer is now **global**, not project-local.
 Entry point:
 
 ```bash
-npx @little-tale/opencode-with-claude install
+npx @little_tale/opencode-with-claude install
 ```
 
 Runtime implementation:
