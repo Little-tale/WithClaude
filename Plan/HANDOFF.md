@@ -1,11 +1,11 @@
 # Agent Workflow MVP — Handoff
 
-Updated: 2026-04-10 (loop issue fixed via v3-style finish emission; second `doStream` empty-output bug also fixed)
+Updated: 2026-04-10 (loop issue fixed via v3-style finish emission; second `doStream` empty-output bug also fixed; plugin now reads global installer config with project-local override; installer now matches XDG-first config resolution and nested overrides merge correctly)
 
 ## Status at a glance
 
 - ✅ `npm run build` passes
-- ✅ `npm test` passes — **36 tests**
+- ✅ `npm test` passes — **42 tests**
 - ✅ Direct provider calls (`doGenerate` / `doStream`) work end-to-end with real Claude CLI
 - ✅ **Loop issue fixed** — provider now emits v3-style `finish` (`{unified, raw}` + nested usage). DB shows `finish="stop"` and tokens populated; no more step storms.
 - ✅ **Second-call empty-output bug fixed** (2026-04-10) — `doStream` now matches `doGenerate`'s session-id cleanup so subsequent invocations from a long-lived OpenCode server (TUI) don't reuse a stale `--session-id` and exit instantly.
@@ -96,6 +96,51 @@ Updated: 2026-04-10 (loop issue fixed via v3-style finish emission; second `doSt
 - `opencode.jsonc` declares `with-claude/haiku`, `with-claude/sonnet`, `with-claude/opus`
 
 ## Session 2026-04-10 (afternoon) — `doStream` second-call empty output
+
+## Session 2026-04-10 (evening) — plugin config fallback matches installer flow
+
+**Symptom:** the installer now writes user-editable Claude role config to the global OpenCode path (`~/.config/opencode/.opencode/opencode-with-claude.jsonc`), but the plugin runtime only read `<projectRoot>/.opencode/opencode-with-claude.jsonc`. That meant `run_claude_plan` / `run_claude_implementation` / `run_claude_review` could ignore the installed global config entirely unless every workspace duplicated the same file locally.
+
+**Fix** (`src/opencode/plugin.ts`):
+- added a global config lookup rooted at `XDG_CONFIG_HOME/opencode` or `~/.config/opencode`
+- load global `opencode-with-claude.jsonc` first
+- load project-local `.opencode/opencode-with-claude.jsonc` second
+- deep-merge the two so workspace-local values override the installed global defaults
+
+**Verification:**
+- `npm run build` ✅
+- `npm test` ✅ — **42 tests**
+- added regression coverage in `src/tests/opencode-plugin-entry.test.ts` proving:
+  - plugin tools work with only the global installed config present
+  - project-local `.opencode/opencode-with-claude.jsonc` overrides the global config for that workspace
+
+## Session 2026-04-10 (late evening) — Oracle follow-up fixes
+
+Oracle review identified two concrete issues in the new global-config flow.
+
+**Fix 1 — installer now matches XDG-first resolution**
+
+- `src/install.ts`
+  - `defaultConfigDir()` now uses `XDG_CONFIG_HOME/opencode` when `XDG_CONFIG_HOME` is set
+  - otherwise still falls back to `~/.config/opencode`
+- `src/tests/install.test.ts`
+  - added coverage for `parseArgs(["install"])` honoring `XDG_CONFIG_HOME`
+
+Reason:
+- before this fix, the installer defaulted to `~/.config/opencode` while the plugin read `XDG_CONFIG_HOME/opencode` first
+- on XDG-configured systems that mismatch could make a default install write config somewhere the plugin would not read first
+
+**Fix 2 — nested overrides now preserve global role/agent fields**
+
+- `src/opencode/plugin.ts`
+  - `mergeWithClaudeConfig()` now deep-merges each `agent.<name>` object
+  - `mergeWithClaudeConfig()` now deep-merges each `claudeCli.roles.<name>` object
+- `src/tests/opencode-plugin-entry.test.ts`
+  - added regression coverage proving a project-local override that changes only `planClaude.model` still preserves global `args`, `prompt`, and `tools`
+
+Reason:
+- the earlier merge only overlaid top-level `agent` and `claudeCli.roles` maps
+- a partial workspace override could silently drop global siblings like permission args or prompts
 
 **Symptom (TUI):** `@planClaude` 첫 호출 정상, 두 번째 호출은 `0 toolcalls · 726ms` 로 빈 응답.
 
@@ -371,6 +416,99 @@ Files touched in this capped repair loop:
 3. **Portable `opencode.jsonc` `npm` field.** Currently an absolute machine path. Options: (a) build-time generator, (b) `npm pack` / `bun link`, (c) document "edit after clone".
 
 4. **OpenCode agent wrappers.** Role wrappers (implClaude, planClaude, reviewClaude) still exist for discovery. Stricter CLI-only future could shrink wrapper intelligence further. Not required for current phase.
+
+## Packaging / install status (2026-04-10)
+
+The package has moved from "local project experiment" toward a distributable install flow.
+
+### Current package state
+
+- `package.json`
+  - `private: false`
+  - `publishConfig.access = "public"`
+  - `bin.opencode-with-claude = ./dist/cli.js`
+  - `files` whitelist limits the npm tarball to package/runtime assets
+- `.npmignore`
+  - present so npm does not fall back to `.gitignore` and accidentally drop `dist/`
+
+### Installer behavior (current truth)
+
+The installer is now **global**, not project-local.
+
+Entry point:
+
+```bash
+npx opencode-with-claude install
+```
+
+Runtime implementation:
+
+- `src/cli.ts` — npm bin entrypoint
+- `src/install.ts` — global install logic
+
+Install target:
+
+- default config dir: `XDG_CONFIG_HOME/opencode` when set, otherwise `~/.config/opencode`
+- overridable for testing with `--config-dir <path>`
+
+What it writes:
+
+- `~/.config/opencode/opencode.json`
+  - merges in the `with-claude` provider
+  - merges in `implClaude`, `planClaude`, `reviewClaude`
+- `~/.config/opencode/.opencode/opencode-with-claude.jsonc`
+- `~/.config/opencode/.opencode/agents/*.md`
+- `~/.config/opencode/.opencode/command/*.md`
+
+Important:
+
+- installer no longer writes project-local `opencode.jsonc`
+- installer no longer emits `opencode-with-claude.snippet.jsonc`
+- existing global config fields are preserved and merged, not replaced wholesale
+
+### Verification
+
+All of the following were re-verified after the global installer switch:
+
+```bash
+npm test
+```
+
+→ **41 tests pass**
+
+Packaged install verification:
+
+```bash
+npm run build
+npm pack
+npm exec --yes --package="file:./opencode-with-claude-0.1.0.tgz" -- opencode-with-claude install --config-dir <tmpdir>
+```
+
+Observed output:
+
+- installer reports successful global installation
+- generated files include:
+  - `opencode.json`
+  - `.opencode/opencode-with-claude.jsonc`
+  - `.opencode/agents/*.md`
+  - `.opencode/command/*.md`
+
+### README status
+
+`README.md` is now aligned with the current installer behavior:
+
+- install-first structure
+- global OpenCode config wording
+- packaged usage examples based on the verified installer path
+
+### Recent packaging/install commits
+
+- `05d4369` — Prepare package for npm distribution
+- `c2f0d1a` — Add package installer for OpenCode setup
+- `7addc18` — Ignore generated local artifacts
+- `93dcd12` — Fix packaged installer entrypoint
+- `5a2e19c` — Point package bin to the CLI wrapper
+- `40cec53` — Rewrite README for package-first installation
 
 ## If you continue from here
 

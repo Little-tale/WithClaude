@@ -25,22 +25,18 @@ npx opencode-with-claude install
 
 ## What the installer does
 
-The installer sets up the minimum files needed for this package inside the current project.
+The installer sets up the minimum files needed for this package inside your global OpenCode config.
+
+By default it uses `XDG_CONFIG_HOME/opencode` when `XDG_CONFIG_HOME` is set; otherwise it falls back to `~/.config/opencode`.
 
 It will:
 
-- create `.opencode/opencode-with-claude.jsonc`
-- copy bundled Claude subagent prompts into `.opencode/agents/`
-- copy bundled reusable command prompts into `.opencode/command/`
-- create `opencode.jsonc` if the project does not already have one
+- create `~/.config/opencode/.opencode/opencode-with-claude.jsonc`
+- copy bundled Claude subagent prompts into `~/.config/opencode/.opencode/agents/`
+- copy bundled reusable command prompts into `~/.config/opencode/.opencode/command/`
+- create or merge `~/.config/opencode/opencode.json`
 
-If `opencode.jsonc` already exists, the installer does **not** overwrite it. Instead, it writes:
-
-```text
-opencode-with-claude.snippet.jsonc
-```
-
-so you can merge the provider/agent block manually.
+If `~/.config/opencode/opencode.json` already exists, the installer preserves existing top-level fields and merges the `with-claude` provider and Claude subagents into that global config.
 
 ## Prerequisites
 
@@ -96,16 +92,16 @@ Other workflow artifacts still use `.omd/plan/<taskId>/...`.
 
 ## Config files
 
-### `opencode.jsonc`
+### `XDG_CONFIG_HOME/opencode/opencode.json` or `~/.config/opencode/opencode.json`
 
-This is the project-level OpenCode config.
+This is the global OpenCode config.
 
 It connects:
 
 - the `with-claude` provider
 - the three Claude subagents
 
-### `.opencode/opencode-with-claude.jsonc`
+### `XDG_CONFIG_HOME/opencode/.opencode/opencode-with-claude.jsonc` or `~/.config/opencode/.opencode/opencode-with-claude.jsonc`
 
 This is the user-editable Claude role config.
 
@@ -114,6 +110,8 @@ Use it to change:
 - role model selection
 - Claude CLI arguments
 - timeouts and related runtime options
+
+The plugin reads this global config by default. If a workspace also has `.opencode/opencode-with-claude.jsonc`, that project-local file overrides the global values for that workspace only. Partial workspace overrides keep the remaining global role settings unless they explicitly replace them.
 
 ## Package surfaces
 
@@ -148,7 +146,7 @@ The published tarball intentionally ships only runtime/package assets:
 - `README.md`
 - `.env.example`
 
-Project-local development files such as `src/`, `Plan/`, `data-*`, and local config are not part of the intended install surface.
+Project-local development files such as `src/`, `Plan/`, `data-*`, and local project config are not part of the intended install surface.
 
 ## Notes
 
@@ -158,14 +156,14 @@ Project-local development files such as `src/`, `Plan/`, `data-*`, and local con
 
 ## Uninstall
 
-Remove the installed files from your project:
+Remove the installed files from your global OpenCode config:
 
-- `.opencode/opencode-with-claude.jsonc`
-- `.opencode/agents/implClaude.md`
-- `.opencode/agents/planClaude.md`
-- `.opencode/agents/reviewClaude.md`
-- `.opencode/command/implClaude.md`
-- `.opencode/command/planClaude.md`
-- `.opencode/command/reviewClaude.md`
+- `~/.config/opencode/.opencode/opencode-with-claude.jsonc`
+- `~/.config/opencode/.opencode/agents/implClaude.md`
+- `~/.config/opencode/.opencode/agents/planClaude.md`
+- `~/.config/opencode/.opencode/agents/reviewClaude.md`
+- `~/.config/opencode/.opencode/command/implClaude.md`
+- `~/.config/opencode/.opencode/command/planClaude.md`
+- `~/.config/opencode/.opencode/command/reviewClaude.md`
 
-If you created a project-level `opencode.jsonc` through the installer, remove or edit the `with-claude` provider and Claude subagent entries manually.
+Then remove or edit the `with-claude` provider and Claude subagent entries in `~/.config/opencode/opencode.json` manually.
