@@ -2,6 +2,22 @@
 
 OpenCode **provider-layer** Claude CLI integration with workflow state adapters (HTTP + MCP) and an optional plugin subpath for local OpenCode workflow tools.
 
+## Install
+
+For a new project:
+
+```bash
+npx opencode-with-claude install
+```
+
+This installer:
+
+- creates `.opencode/opencode-with-claude.jsonc`
+- copies bundled Claude subagent and command prompt files into `.opencode/`
+- creates a baseline `opencode.jsonc` if one does not already exist
+
+If `opencode.jsonc` already exists, the installer preserves it and writes `opencode-with-claude.snippet.jsonc` for manual merge.
+
 ## Package contents
 
 The published package is intended to ship only the runtime/provider surfaces and bundled OpenCode prompt assets:
