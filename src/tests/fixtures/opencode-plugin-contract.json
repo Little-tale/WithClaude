@@ -1,0 +1,18 @@
+{
+  "pluginModule": "oh-my-openagent",
+  "expectedPackageName": "oh-my-openagent",
+  "expectedCliSubcommands": [
+    "opencode plugin <module>",
+    "opencode run [message..]"
+  ],
+  "expectedPluginHelpSnippets": [
+    "install plugin and update config",
+    "--global",
+    "--force"
+  ],
+  "requiredPluginArtifacts": [
+    "dist/index.js",
+    "dist/oh-my-opencode.schema.json",
+    "dist/create-hooks.d.ts"
+  ]
+}

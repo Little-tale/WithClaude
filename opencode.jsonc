@@ -1,0 +1,77 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "provider": {
+    "with-claude": {
+      "npm": "file:///Users/jaehyungkim/Desktop/agent-workflow-mvp/dist/index.js",
+      "models": {
+        "haiku": {
+          "name": "WithClaude Haiku",
+          "attachment": false,
+          "limit": {
+            "context": 200000,
+            "output": 8192
+          },
+          "capabilities": {
+            "reasoning": false,
+            "toolcall": true
+          }
+        },
+        "sonnet": {
+          "name": "WithClaude Sonnet",
+          "attachment": false,
+          "limit": {
+            "context": 1000000,
+            "output": 16384
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolcall": true
+          }
+        },
+        "opus": {
+          "name": "WithClaude Opus",
+          "attachment": false,
+          "limit": {
+            "context": 1000000,
+            "output": 16384
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolcall": true
+          }
+        }
+      },
+      "options": {
+        "cliPath": "claude"
+      }
+    }
+  },
+  // Discovery shim for the @ picker.
+  // Actual Claude model/tool customization lives in .opencode/opencode-with-claude.jsonc.
+  "agent": {
+    "implClaude": {
+      "description": "Claude implementation executor for approved workflow tasks",
+      "mode": "subagent",
+      "hidden": false,
+      "model": "with-claude/sonnet",
+      "prompt": "{file:.opencode/agents/implClaude.md}",
+      "tools": {}
+    },
+    "planClaude": {
+      "description": "Claude planning assistant for workflow task plans",
+      "mode": "subagent",
+      "hidden": false,
+      "model": "with-claude/opus",
+      "prompt": "{file:.opencode/agents/planClaude.md}",
+      "tools": {}
+    },
+    "reviewClaude": {
+      "description": "Claude review assistant for implementation verification",
+      "mode": "subagent",
+      "hidden": false,
+      "model": "with-claude/sonnet",
+      "prompt": "{file:.opencode/agents/reviewClaude.md}",
+      "tools": {}
+    }
+  }
+}

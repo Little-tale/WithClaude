@@ -1,0 +1,22 @@
+{
+  "claudeCli": {
+    "command": "claude",
+    "commonArgs": ["-p", "--output-format", "json"],
+    "timeoutMs": 900000,
+    "roles": {
+      "planClaude": {
+        // Choose one of: haiku, sonnet, opus
+        "model": "sonnet",
+        "args": ["--permission-mode", "plan"]
+      },
+      "implClaude": {
+        "model": "sonnet",
+        "args": ["--permission-mode", "acceptEdits", "--add-dir", "{{workspaceRoot}}"]
+      },
+      "reviewClaude": {
+        "model": "sonnet",
+        "args": ["--permission-mode", "plan"]
+      }
+    }
+  }
+}

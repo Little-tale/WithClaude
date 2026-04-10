@@ -1,0 +1,65 @@
+{
+  "tasks": [
+    {
+      "taskId": "task-a433ae65",
+      "title": "Request from agent-workflow-mvp",
+      "request": "Workspace: /Users/jaehyungkim/Desktop/agent-workflow-mvp\n\nRouting mode: sequential\n\nRequested stage: request\n\nUser request:\nPlan a minimal verification workflow for this repository. Return only markdown plan bullets.",
+      "planText": "# Minimal Verification Workflow Plan\n\n## Environment Setup\n- Verify Node.js >= 18 and npm are installed\n- Install project dependencies with `npm ci`\n- Ensure `.env` file exists with required variables (DISCORD_TOKEN, etc.)\n\n## Build Verification\n- Run `npm run build` to compile TypeScript\n- Verify no compilation errors\n- Check that `dist/` directory contains compiled JavaScript\n\n## Core Functionality Tests\n- Run `npm test` to execute existing test suite\n- Verify all tests pass (opencode-bridge, runtime-transport, planner-safety)\n- Check test output for any failures\n\n## CLI Commands Smoke Test\n- Test `opencode-planner-bridge --help` shows usage\n- Verify `opendiscord` command exists after build\n- Test basic CLI parsing with invalid arguments shows error\n\n## Service Initialization\n- Start HTTP server briefly with `npm run dev:cli &` (background)\n- Verify server starts without errors on port 3000\n- Stop background process after 2 seconds\n- Repeat for MCP server with `npm run dev:mcp &`\n\n## Task Store Validation\n- Verify JSON task store creates/reads/writes properly\n- Check data directory for task persistence\n- Test basic CRUD operations through orchestrator\n\n## Cleanup\n- Remove any temporary test files created\n- Ensure no processes are left running\n- Verify git status shows no unintended changes\n\n## Success Criteria\n- All verification steps complete without errors\n- Build and test commands exit with code 0\n- Services start and bind to expected ports\n- No linting or type errors reported\n- Core workflow components initialize correctly",
+      "requestedStage": "request",
+      "routingMode": "sequential",
+      "source": "cli",
+      "workspaceRoot": "/Users/jaehyungkim/Desktop/agent-workflow-mvp",
+      "status": "awaiting_approval",
+      "planRevision": 1,
+      "requesterId": "cli:jaehyungkim",
+      "approvedBy": null,
+      "approvedAt": null,
+      "implementationSummary": null,
+      "reviewSummary": null,
+      "artifacts": {
+        "requestMarkdownPath": "Plan/task-a433ae65/request.md",
+        "planMarkdownPath": "Plan/task-a433ae65/plan-v1.md",
+        "implementationMarkdownPath": null,
+        "reviewMarkdownPath": null
+      },
+      "requestThreadId": null,
+      "planThreadId": null,
+      "implementThreadId": null,
+      "reviewThreadId": null,
+      "createdAt": "2026-04-08T05:05:26.079Z",
+      "updatedAt": "2026-04-08T05:06:41.026Z",
+      "history": [
+        {
+          "at": "2026-04-08T05:05:26.080Z",
+          "type": "created",
+          "actorId": "cli:jaehyungkim",
+          "note": "Task created and waiting for generated plan"
+        },
+        {
+          "at": "2026-04-08T05:05:26.082Z",
+          "type": "artifacts_updated",
+          "actorId": "prometheus",
+          "note": "Updated artifacts: requestMarkdownPath"
+        },
+        {
+          "at": "2026-04-08T05:06:41.024Z",
+          "type": "plan_revised",
+          "actorId": "prometheus",
+          "note": "Initial plan published as revision 1"
+        },
+        {
+          "at": "2026-04-08T05:06:41.024Z",
+          "type": "status_changed",
+          "actorId": "prometheus",
+          "note": "Transitioned to awaiting_approval"
+        },
+        {
+          "at": "2026-04-08T05:06:41.026Z",
+          "type": "artifacts_updated",
+          "actorId": "prometheus",
+          "note": "Updated artifacts: planMarkdownPath"
+        }
+      ]
+    }
+  ]
+}

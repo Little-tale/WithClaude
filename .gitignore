@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env
+data/
+.DS_Store
+.omd/
+.omc/
+.tmp-provider-*.log
+.tmp-provider-*.jsonl
