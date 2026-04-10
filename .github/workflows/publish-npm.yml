@@ -1,0 +1,78 @@
+name: Publish to npm
+
+on:
+  workflow_run:
+    workflows:
+      - CI
+    types:
+      - completed
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: publish-npm-main
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      (
+        github.event.workflow_run.conclusion == 'success' &&
+        github.event.workflow_run.event == 'push' &&
+        github.event.workflow_run.head_branch == 'main'
+      )
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.ref || github.event.workflow_run.head_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          registry-url: https://registry.npmjs.org
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Resolve package metadata
+        id: package
+        run: |
+          echo "name=$(node -p \"require('./package.json').name\")" >> "$GITHUB_OUTPUT"
+          echo "version=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether version is already published
+        id: published
+        env:
+          PACKAGE_NAME: ${{ steps.package.outputs.name }}
+          PACKAGE_VERSION: ${{ steps.package.outputs.version }}
+        run: |
+          if npm view "$PACKAGE_NAME@$PACKAGE_VERSION" version >/dev/null 2>&1; then
+            echo "should_publish=false" >> "$GITHUB_OUTPUT"
+            echo "version=$PACKAGE_VERSION is already published for $PACKAGE_NAME; skipping."
+          else
+            echo "should_publish=true" >> "$GITHUB_OUTPUT"
+            echo "version=$PACKAGE_VERSION is not published yet for $PACKAGE_NAME; continuing."
+          fi
+
+      - name: Publish package
+        if: steps.published.outputs.should_publish == 'true'
+        run: npm publish --provenance --access public
+
+      - name: Publish summary
+        run: |
+          if [ "${{ steps.published.outputs.should_publish }}" = "true" ]; then
+            echo "Published ${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }}"
+          else
+            echo "Skipped publish because ${{ steps.package.outputs.name }}@${{ steps.package.outputs.version }} already exists"
+          fi
