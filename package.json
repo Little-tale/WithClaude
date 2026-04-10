@@ -5,7 +5,7 @@
   "description": "Claude CLI provider and workflow plugin surfaces for OpenCode.",
   "type": "module",
   "bin": {
-    "opencode-with-claude": "./dist/install.js"
+    "opencode-with-claude": "./dist/cli.js"
   },
   "files": [
     "dist/**/*",
