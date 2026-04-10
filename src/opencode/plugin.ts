@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -34,6 +35,65 @@ type WithClaudeConfig = {
   agent?: Record<string, WithClaudeAgentConfig>;
   claudeCli?: ClaudeCliConfig;
 };
+
+function defaultOpenCodeConfigDir(): string {
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME?.trim();
+  return xdgConfigHome
+    ? path.resolve(xdgConfigHome, "opencode")
+    : path.join(os.homedir(), ".config", "opencode");
+}
+
+async function readWithClaudeConfigFile(filePath: string): Promise<WithClaudeConfig> {
+  try {
+    const content = await readFile(filePath, "utf8");
+    const parsed = parseJsoncObject(content) as unknown;
+    return parsed && typeof parsed === "object" ? (parsed as WithClaudeConfig) : {};
+  } catch {
+    return {};
+  }
+}
+
+function mergeWithClaudeConfig(base: WithClaudeConfig, override: WithClaudeConfig): WithClaudeConfig {
+  const mergedAgent = base.agent || override.agent
+    ? Object.fromEntries(
+        Array.from(new Set([...Object.keys(base.agent ?? {}), ...Object.keys(override.agent ?? {})])).map((agentName) => [
+            agentName,
+            {
+              ...(base.agent?.[agentName] ?? {}),
+              ...(override.agent?.[agentName] ?? {})
+            }
+          ])
+      )
+    : undefined;
+
+  const mergedClaudeCli = base.claudeCli || override.claudeCli
+    ? {
+      ...(base.claudeCli ?? {}),
+      ...(override.claudeCli ?? {}),
+      roles: Object.fromEntries(
+        Array.from(
+          new Set([
+            ...Object.keys(base.claudeCli?.roles ?? {}),
+            ...Object.keys(override.claudeCli?.roles ?? {})
+          ])
+        ).map((roleName) => [
+            roleName,
+            {
+              ...(base.claudeCli?.roles?.[roleName as keyof NonNullable<typeof base.claudeCli.roles>] ?? {}),
+              ...(override.claudeCli?.roles?.[roleName as keyof NonNullable<typeof override.claudeCli.roles>] ?? {})
+            }
+          ])
+      )
+    }
+    : undefined;
+
+  return {
+    ...(base ?? {}),
+    ...(override ?? {}),
+    ...(mergedAgent ? { agent: mergedAgent } : {}),
+    ...(mergedClaudeCli ? { claudeCli: mergedClaudeCli } : {})
+  };
+}
 
 async function loadBundledSubagent(name: string): Promise<LoadedSubagent> {
   const filePath = path.join(packageRoot, ".opencode", "agents", `${name}.md`);
@@ -99,14 +159,14 @@ async function loadBundledSubagent(name: string): Promise<LoadedSubagent> {
 }
 
 async function loadWithClaudeConfig(projectRoot: string): Promise<WithClaudeConfig> {
-  const filePath = path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc");
-  try {
-    const content = await readFile(filePath, "utf8");
-    const parsed = parseJsoncObject(content) as unknown;
-    return parsed && typeof parsed === "object" ? (parsed as WithClaudeConfig) : {};
-  } catch {
-    return {};
-  }
+  const globalFilePath = path.join(defaultOpenCodeConfigDir(), ".opencode", "opencode-with-claude.jsonc");
+  const projectFilePath = path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc");
+  const [globalConfig, projectConfig] = await Promise.all([
+    readWithClaudeConfigFile(globalFilePath),
+    readWithClaudeConfigFile(projectFilePath)
+  ]);
+
+  return mergeWithClaudeConfig(globalConfig, projectConfig);
 }
 
 function parseJsoncObject(content: string): unknown {
