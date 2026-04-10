@@ -2,13 +2,14 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import * as z from "zod/v4";
 
+import { PACKAGE_VERSION } from "../generated/package-version.js";
 import type { OrchestrationHost } from "../orchestrator/host.js";
 
 export function createMcpServer(host: OrchestrationHost): McpServer {
   const server = new McpServer(
     {
       name: "agent-workflow-mcp",
-      version: "0.1.0"
+      version: PACKAGE_VERSION
     },
     {
       capabilities: { logging: {} }
