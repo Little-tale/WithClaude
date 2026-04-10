@@ -347,6 +347,26 @@ Files touched in this capped repair loop:
    - TUI mention-style: `@planClaude`, `@implClaude`, `@reviewClaude`
    - **not** `opencode run --agent <subagent>`
 
+   Additional command-surface note:
+
+   - `.opencode/command/planClaude.md`, `.opencode/command/implClaude.md`, `.opencode/command/reviewClaude.md` now explicitly instruct the current primary agent to delegate to `@planClaude`, `@implClaude`, `@reviewClaude`.
+   - Reason: the actual save behavior lives in the subagent tool path (`run_claude_plan`, `run_claude_implementation`, `run_claude_review`), not in plain free-text replies.
+   - If a user runs a reusable command and only gets an answer without persistence, the likely cause is that the current primary agent did not delegate into the subagent/tool workflow.
+
+   Plan artifact location was also updated:
+
+   - `src/artifacts/markdown-artifacts.ts` now saves **plan markdown only** to:
+     1. `.sisyphus/plans/plan-v<revision>.md` if `<workspaceRoot>/.sisyphus/plans` exists
+     2. otherwise `plans/plan-v<revision>.md`
+   - request / implementation / review artifacts remain under `.omd/plan/<taskId>/...`
+
+   Verification:
+
+   - `npm test` passes (**38 tests**)
+   - direct manual checks after build produced:
+     - with `.sisyphus/plans` present → `.sisyphus/plans/plan-v1.md`
+     - without it → `plans/plan-v1.md`
+
 3. **Portable `opencode.jsonc` `npm` field.** Currently an absolute machine path. Options: (a) build-time generator, (b) `npm pack` / `bun link`, (c) document "edit after clone".
 
 4. **OpenCode agent wrappers.** Role wrappers (implClaude, planClaude, reviewClaude) still exist for discovery. Stricter CLI-only future could shrink wrapper intelligence further. Not required for current phase.

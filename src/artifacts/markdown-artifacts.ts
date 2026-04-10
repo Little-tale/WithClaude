@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import { access, mkdir, writeFile } from "node:fs/promises";
 import path from "node:path";
 
 import type { TaskArtifacts, WorkflowTask } from "../types/task.js";
@@ -36,8 +36,8 @@ export class MarkdownArtifactService {
     return normalizePath(path.join(".omd", "plan", taskId, "request.md"));
   }
 
-  planArtifactPath(taskId: string, planRevision: number): string {
-    return normalizePath(path.join(".omd", "plan", taskId, `plan-v${planRevision}.md`));
+  planArtifactPath(taskId: string, planRevision: number, baseDir = path.join(".omd", "plan", taskId)): string {
+    return normalizePath(path.join(baseDir, `plan-v${planRevision}.md`));
   }
 
   implementationArtifactPath(taskId: string): string {
@@ -72,7 +72,7 @@ export class MarkdownArtifactService {
   }
 
   async writePlanArtifact(task: WorkflowTask): Promise<MarkdownArtifactSummary> {
-    const relativePath = this.planArtifactPath(task.taskId, task.planRevision);
+    const relativePath = await this.resolvePlanArtifactPath(task);
     const content = [
       `# Plan · ${task.taskId}`,
       "",
@@ -147,6 +147,18 @@ export class MarkdownArtifactService {
   async syncReviewArtifact(task: WorkflowTask): Promise<Partial<TaskArtifacts>> {
     const review = await this.writeReviewArtifact(task);
     return { reviewMarkdownPath: review.artifactPath };
+  }
+
+  private async resolvePlanArtifactPath(task: WorkflowTask): Promise<string> {
+    const root = task.workspaceRoot ?? this.fallbackRoot;
+    const sisyphusPlansDir = path.resolve(root, ".sisyphus", "plans");
+
+    try {
+      await access(sisyphusPlansDir);
+      return this.planArtifactPath(task.taskId, task.planRevision, ".sisyphus/plans");
+    } catch {
+      return this.planArtifactPath(task.taskId, task.planRevision, "plans");
+    }
   }
 
   private async writeArtifact(task: WorkflowTask, relativePath: string, content: string): Promise<void> {

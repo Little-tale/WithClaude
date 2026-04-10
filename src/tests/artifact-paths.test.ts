@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, readFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -37,31 +37,47 @@ function buildTask(overrides: Partial<WorkflowTask> = {}): WorkflowTask {
   };
 }
 
-test("artifact path helpers preserve .omd/plan semantics", () => {
+test("artifact path helpers preserve request/review .omd semantics", () => {
   const service = new MarkdownArtifactService("/tmp/fallback-root");
 
   assert.equal(service.requestArtifactPath("task-abc123"), ".omd/plan/task-abc123/request.md");
-  assert.equal(service.planArtifactPath("task-abc123", 2), ".omd/plan/task-abc123/plan-v2.md");
+  assert.equal(service.planArtifactPath("task-abc123", 2, ".sisyphus/plans"), ".sisyphus/plans/plan-v2.md");
+  assert.equal(service.planArtifactPath("task-abc123", 2, "plans"), "plans/plan-v2.md");
   assert.equal(service.implementationArtifactPath("task-abc123"), ".omd/plan/task-abc123/implementation-summary.md");
   assert.equal(service.reviewArtifactPath("task-abc123"), ".omd/plan/task-abc123/review-summary.md");
 });
 
-test("request and plan artifacts write under workspaceRoot when available", async () => {
+test("request artifact uses .omd and plan artifact prefers .sisyphus/plans when present", async () => {
   const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-artifacts-workspace-"));
   const fallbackRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-artifacts-fallback-"));
   const service = new MarkdownArtifactService(fallbackRoot);
   const task = buildTask({ taskId: "task-workspace-root", workspaceRoot });
 
+  await mkdir(path.join(workspaceRoot, ".sisyphus", "plans"), { recursive: true });
+
   const request = await service.writeRequestArtifact(task);
   const plan = await service.writePlanArtifact(task);
 
   assert.equal(request.artifactPath, ".omd/plan/task-workspace-root/request.md");
-  assert.equal(plan.artifactPath, ".omd/plan/task-workspace-root/plan-v1.md");
+  assert.equal(plan.artifactPath, ".sisyphus/plans/plan-v1.md");
 
   const requestBody = await readFile(path.join(workspaceRoot, request.artifactPath), "utf8");
   const planBody = await readFile(path.join(workspaceRoot, plan.artifactPath), "utf8");
   assert.match(requestBody, /## Original request/);
   assert.match(planBody, /# Plan · task-workspace-root/);
+});
+
+test("plan artifact falls back to plans when .sisyphus/plans is absent", async () => {
+  const workspaceRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-artifacts-plan-fallback-"));
+  const fallbackRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-artifacts-plan-fallback-root-"));
+  const service = new MarkdownArtifactService(fallbackRoot);
+  const task = buildTask({ taskId: "task-plan-fallback", workspaceRoot });
+
+  const plan = await service.writePlanArtifact(task);
+
+  assert.equal(plan.artifactPath, "plans/plan-v1.md");
+  const planBody = await readFile(path.join(workspaceRoot, plan.artifactPath), "utf8");
+  assert.match(planBody, /# Plan · task-plan-fallback/);
 });
 
 test("artifact writes fall back to the service root when workspaceRoot is null", async () => {
