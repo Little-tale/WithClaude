@@ -15,8 +15,8 @@ test("installer creates baseline OpenCode config and bundled assets in a new pro
   const roleConfig = await readFile(path.join(configDir, ".opencode", "opencode-with-claude.jsonc"), "utf8");
   const agentPrompt = await readFile(path.join(configDir, ".opencode", "agents", "planClaude.md"), "utf8");
 
-  assert.match(output, /Installed @little-tale\/opencode-with-claude into global OpenCode config/);
-  assert.match(opencodeConfig, /"npm": "@little-tale\/opencode-with-claude"/);
+  assert.match(output, /Installed @little_tale\/opencode-with-claude into global OpenCode config/);
+  assert.match(opencodeConfig, /"npm": "@little_tale\/opencode-with-claude"/);
   assert.match(opencodeConfig, /\.opencode\/agents\/planClaude\.md/);
   assert.match(roleConfig, /"claudeCli"/);
   assert.match(agentPrompt, /run_claude_plan/);
