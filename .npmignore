@@ -1,0 +1,2 @@
+# Packaging is controlled by the package.json `files` whitelist.
+# This file exists so npm does not fall back to `.gitignore` and accidentally drop `dist/`.

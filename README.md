@@ -2,6 +2,19 @@
 
 OpenCode **provider-layer** Claude CLI integration with workflow state adapters (HTTP + MCP) and an optional plugin subpath for local OpenCode workflow tools.
 
+## Package contents
+
+The published package is intended to ship only the runtime/provider surfaces and bundled OpenCode prompt assets:
+
+- `dist/`
+- `.opencode/agents/`
+- `.opencode/command/`
+- `.opencode/opencode-with-claude.jsonc`
+- `README.md`
+- `.env.example`
+
+Project-local files like `opencode.jsonc`, `Plan/`, `data-*`, `src/`, and tests are development assets and are not intended to be part of the npm tarball.
+
 ## What exists now
 
 - Claude CLI-backed provider package at the package root (`src/provider/*`)

@@ -1,8 +1,17 @@
 {
   "name": "opencode-with-claude",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
+  "description": "Claude CLI provider and workflow plugin surfaces for OpenCode.",
   "type": "module",
+  "files": [
+    "dist/**/*",
+    ".opencode/agents/**/*",
+    ".opencode/command/**/*",
+    ".opencode/opencode-with-claude.jsonc",
+    "README.md",
+    ".env.example"
+  ],
   "main": "dist/index.js",
   "exports": {
     ".": {
@@ -19,6 +28,9 @@
     "test": "npm run build && node --test dist/tests/*.test.js",
     "start": "node dist/main.js",
     "start:mcp": "node dist/mcp-main.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "dependencies": {
     "@ai-sdk/provider": "^2.0.0",
