@@ -4,36 +4,53 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
-import { installOpenCodeWithClaude } from "../install.js";
+import { installOpenCodeWithClaude, parseArgs } from "../install.js";
 
 test("installer creates baseline OpenCode config and bundled assets in a new project", async () => {
-  const cwd = await mkdtemp(path.join(os.tmpdir(), "agentwf-install-new-"));
+  const configDir = await mkdtemp(path.join(os.tmpdir(), "agentwf-install-new-"));
 
-  const output = await installOpenCodeWithClaude({ cwd, force: false });
+  const output = await installOpenCodeWithClaude({ configDir, force: false });
 
-  const opencodeConfig = await readFile(path.join(cwd, "opencode.jsonc"), "utf8");
-  const roleConfig = await readFile(path.join(cwd, ".opencode", "opencode-with-claude.jsonc"), "utf8");
-  const agentPrompt = await readFile(path.join(cwd, ".opencode", "agents", "planClaude.md"), "utf8");
+  const opencodeConfig = await readFile(path.join(configDir, "opencode.json"), "utf8");
+  const roleConfig = await readFile(path.join(configDir, ".opencode", "opencode-with-claude.jsonc"), "utf8");
+  const agentPrompt = await readFile(path.join(configDir, ".opencode", "agents", "planClaude.md"), "utf8");
 
-  assert.match(output, /Created project config: opencode\.jsonc/);
+  assert.match(output, /Installed opencode-with-claude into global OpenCode config/);
   assert.match(opencodeConfig, /"npm": "opencode-with-claude"/);
+  assert.match(opencodeConfig, /\.opencode\/agents\/planClaude\.md/);
   assert.match(roleConfig, /"claudeCli"/);
   assert.match(agentPrompt, /run_claude_plan/);
 });
 
-test("installer preserves existing opencode.jsonc and writes a merge snippet", async () => {
-  const cwd = await mkdtemp(path.join(os.tmpdir(), "agentwf-install-existing-"));
-  const existingConfigPath = path.join(cwd, "opencode.jsonc");
+test("installer preserves existing global config fields while merging with-claude setup", async () => {
+  const configDir = await mkdtemp(path.join(os.tmpdir(), "agentwf-install-existing-"));
+  const existingConfigPath = path.join(configDir, "opencode.json");
   await writeFile(existingConfigPath, '{"existing":true}\n', "utf8");
 
-  const output = await installOpenCodeWithClaude({ cwd, force: false });
+  const output = await installOpenCodeWithClaude({ configDir, force: false });
 
   const existingConfig = await readFile(existingConfigPath, "utf8");
-  const snippet = await readFile(path.join(cwd, "opencode-with-claude.snippet.jsonc"), "utf8");
 
-  assert.equal(existingConfig, '{"existing":true}\n');
-  assert.match(output, /Existing opencode\.jsonc preserved/);
-  assert.match(snippet, /"with-claude"/);
+  assert.match(existingConfig, /"existing": true/);
+  assert.match(existingConfig, /"with-claude"/);
+  assert.match(output, /Updated global config: opencode\.json/);
+});
+
+test("installer default config dir honors XDG_CONFIG_HOME", async () => {
+  const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-install-xdg-"));
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+
+  try {
+    const parsed = parseArgs(["install"]);
+    assert.equal(parsed.configDir, path.join(xdgConfigHome, "opencode"));
+  } finally {
+    if (originalXdgConfigHome === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
+    }
+  }
 });
 
 test("built installer entrypoint keeps a node shebang", async () => {
