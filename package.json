@@ -3,6 +3,10 @@
   "version": "0.1.0",
   "private": false,
   "description": "Claude CLI provider and workflow plugin surfaces for OpenCode.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Little-tale/WithClaude.git"
+  },
   "type": "module",
   "bin": {
     "opencode-with-claude": "./dist/cli.js"
