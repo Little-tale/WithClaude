@@ -3,7 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-const PACKAGE_NAME = "opencode-with-claude";
+const PACKAGE_NAME = "@little-tale/opencode-with-claude";
 
 type InstallOptions = {
   configDir: string;
