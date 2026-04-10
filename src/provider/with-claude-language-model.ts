@@ -159,7 +159,8 @@ export class WithClaudeLanguageModel implements LanguageModelV2 {
 
     return {
       content,
-      finishReason: (toolCalls.length > 0 ? "tool-calls" : "stop") as LanguageModelV2FinishReason,
+      // Claude CLI executes all tools internally — turn is always complete
+      finishReason: "stop" as LanguageModelV2FinishReason,
       usage: mappedUsage,
       request: { body: { text: userMessage } },
       response: {
@@ -359,13 +360,16 @@ export class WithClaudeLanguageModel implements LanguageModelV2 {
               }
             }
             if (msg.type === "result") {
-              closeStream(emittedToolCallCount > 0 ? "tool-calls" : "stop", msg.usage);
+              // Claude CLI executes all tools internally — from OpenCode's
+              // perspective the turn is always complete, so finish = "stop".
+              closeStream("stop", msg.usage);
             }
           } catch {}
         };
 
         const closeHandler = () => {
-          closeStream(emittedToolCallCount > 0 ? "tool-calls" : "stop");
+          // Claude CLI handles its own tool loop — always "stop"
+          closeStream("stop");
         };
 
         const errorHandler = (err: Error) => {

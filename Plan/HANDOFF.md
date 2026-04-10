@@ -9,6 +9,7 @@ Updated: 2026-04-10 (loop issue fixed via v3-style finish emission; second `doSt
 - ✅ Direct provider calls (`doGenerate` / `doStream`) work end-to-end with real Claude CLI
 - ✅ **Loop issue fixed** — provider now emits v3-style `finish` (`{unified, raw}` + nested usage). DB shows `finish="stop"` and tokens populated; no more step storms.
 - ✅ **Second-call empty-output bug fixed** (2026-04-10) — `doStream` now matches `doGenerate`'s session-id cleanup so subsequent invocations from a long-lived OpenCode server (TUI) don't reuse a stale `--session-id` and exit instantly.
+- ✅ **Tool-calls loop fix** (2026-04-10) — `finish` reason now always `"stop"` since Claude CLI executes all tools internally. Previously `"tool-calls"` was emitted when tool_use blocks appeared in CLI output, causing OpenCode to re-enter its step loop indefinitely (manifested as `@planClaude` repeating the same answer).
 - ✅ No `ProviderInitError`, no `MaxListenersExceededWarning`
 - ✅ `opencode agent list` shows `implClaude`, `planClaude`, `reviewClaude`
 - ✅ Direct provider runtime tests pass outside OpenCode
