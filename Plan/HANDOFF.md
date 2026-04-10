@@ -424,9 +424,11 @@ The package has moved from "local project experiment" toward a distributable ins
 ### Current package state
 
 - `package.json`
+  - `name = @little-tale/opencode-with-claude`
   - `private: false`
   - `publishConfig.access = "public"`
   - `bin.opencode-with-claude = ./dist/cli.js`
+  - `prepack = npm run build`
   - `files` whitelist limits the npm tarball to package/runtime assets
 - `.npmignore`
   - present so npm does not fall back to `.gitignore` and accidentally drop `dist/`
@@ -438,7 +440,7 @@ The installer is now **global**, not project-local.
 Entry point:
 
 ```bash
-npx opencode-with-claude install
+npx @little-tale/opencode-with-claude install
 ```
 
 Runtime implementation:
@@ -474,14 +476,14 @@ All of the following were re-verified after the global installer switch:
 npm test
 ```
 
-→ **41 tests pass**
+→ **44 tests pass**
 
 Packaged install verification:
 
 ```bash
 npm run build
 npm pack
-npm exec --yes --package="file:./opencode-with-claude-0.1.0.tgz" -- opencode-with-claude install --config-dir <tmpdir>
+npm exec --yes --package="file:./little-tale-opencode-with-claude-0.1.0.tgz" -- opencode-with-claude install --config-dir <tmpdir>
 ```
 
 Observed output:

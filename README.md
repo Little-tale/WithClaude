@@ -12,7 +12,7 @@ This package gives you two things:
 ### For humans
 
 ```bash
-npx opencode-with-claude install
+npx @little-tale/opencode-with-claude install
 ```
 
 ### For LLM agents
@@ -20,7 +20,7 @@ npx opencode-with-claude install
 Tell the agent to run:
 
 ```bash
-npx opencode-with-claude install
+npx @little-tale/opencode-with-claude install
 ```
 
 ## What the installer does
