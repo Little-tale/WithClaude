@@ -2,6 +2,8 @@
 
 Use Claude as a review assistant for the current task.
 
+Delegate this request to `@reviewClaude`. Do not review directly in the current agent.
+
 Use pragmatic minimalism and keep the verdict dense and useful.
 
 ## Expected tool flow
@@ -13,6 +15,7 @@ Only continue if implementation has already been recorded.
 
 ## Required behavior
 
+- Hand off to `@reviewClaude` instead of responding directly in the current primary agent.
 - Read the current task context, approved plan, and implementation summary.
 - Review whether the implementation matches the approved plan through Claude CLI.
 - Identify gaps, risks, and follow-up changes.

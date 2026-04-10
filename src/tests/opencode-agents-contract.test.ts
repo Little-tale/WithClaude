@@ -36,3 +36,18 @@ test("agent manifests encode distinct role boundaries and workflow expectations"
   assert.match(reviewAgent, /Only continue if implementation has actually been recorded/);
   assert.match(reviewAgent, /run_claude_review/);
 });
+
+test("command prompts delegate to the matching Claude subagents", async () => {
+  const planCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "planClaude.md"), "utf8");
+  const implCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "implClaude.md"), "utf8");
+  const reviewCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "reviewClaude.md"), "utf8");
+
+  assert.match(planCommand, /@planClaude/);
+  assert.match(planCommand, /Do not write the plan yourself/i);
+
+  assert.match(implCommand, /@implClaude/);
+  assert.match(implCommand, /Do not implement directly/i);
+
+  assert.match(reviewCommand, /@reviewClaude/);
+  assert.match(reviewCommand, /Do not review directly/i);
+});

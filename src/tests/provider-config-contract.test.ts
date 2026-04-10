@@ -20,7 +20,7 @@ test("opencode.jsonc declares the with-claude provider and binds Claude agents t
   // `file://.` is not a valid import URL — must be `file:///absolute/path/to/file.js`.
   assert.ok(typeof npmSpec === "string" && /^file:\/\/\/.+\/dist\/index\.js$/.test(npmSpec), `npm spec must be an absolute file:// URL to dist/index.js, got: ${npmSpec}`);
   assert.deepEqual(Object.keys(parsed.provider?.["with-claude"]?.models ?? {}).sort(), ["haiku", "opus", "sonnet"]);
-  assert.equal(parsed.agent?.planClaude?.model, "with-claude/sonnet");
+  assert.equal(parsed.agent?.planClaude?.model, "with-claude/opus");
   assert.equal(parsed.agent?.implClaude?.model, "with-claude/sonnet");
   assert.equal(parsed.agent?.reviewClaude?.model, "with-claude/sonnet");
 });

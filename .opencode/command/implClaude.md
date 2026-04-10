@@ -2,6 +2,8 @@
 
 Use Claude as the implementation executor for the current approved plan.
 
+Delegate this request to `@implClaude`. Do not implement directly in the current agent.
+
 Keep going. Solve problems. Ask only when truly blocked.
 
 ## Expected tool flow
@@ -17,6 +19,7 @@ Approval is explicit. `approve_task` does not auto-run implementation for you.
 
 ## Required behavior
 
+- Hand off to `@implClaude` instead of responding directly in the current primary agent.
 - Read the current approved plan and task context from the plugin tools.
 - Work only in the current project/worktree.
 - Make the necessary code changes through Claude CLI.
