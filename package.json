@@ -1,8 +1,12 @@
 {
-  "name": "opencode-with-claude",
+  "name": "@little_tale/opencode-with-claude",
   "version": "0.1.0",
   "private": false,
   "description": "Claude CLI provider and workflow plugin surfaces for OpenCode.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Little-tale/WithClaude.git"
+  },
   "type": "module",
   "bin": {
     "opencode-with-claude": "./dist/cli.js"
@@ -28,6 +32,7 @@
     "dev": "tsx watch src/main.ts",
     "dev:mcp": "tsx watch src/mcp-main.ts",
     "build": "rm -rf dist && tsc -p tsconfig.json",
+    "prepack": "npm run build",
     "test": "npm run build && node --test dist/tests/*.test.js",
     "start": "node dist/main.js",
     "start:mcp": "node dist/mcp-main.js"
