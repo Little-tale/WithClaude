@@ -3,7 +3,10 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
-const PACKAGE_NAME = "@little_tale/opencode-with-claude";
+import { defaultOpenCodeConfigDir } from "./opencode/default-config-dir.js";
+import { ensurePluginRuntimeBootstrap } from "./opencode/plugin-runtime-bootstrap.js";
+import { bundledOverrideTemplate } from "./opencode/override-template.js";
+import { PACKAGE_NAME } from "./package-identity.js";
 
 type InstallOptions = {
   configDir: string;
@@ -18,10 +21,7 @@ type OpenCodeConfig = {
 };
 
 function defaultConfigDir(): string {
-  const xdgConfigHome = process.env.XDG_CONFIG_HOME?.trim();
-  return xdgConfigHome
-    ? path.resolve(xdgConfigHome, "opencode")
-    : path.join(os.homedir(), ".config", "opencode");
+  return defaultOpenCodeConfigDir();
 }
 
 export function parseArgs(argv: string[]): InstallOptions {
@@ -62,10 +62,6 @@ function installTarget(relativePath: string, configDir: string): string {
   return path.join(configDir, relativePath);
 }
 
-function promptReference(configDir: string, relativePath: string): string {
-  return `{file:${installTarget(relativePath, configDir)}}`;
-}
-
 async function copyBundledFile(configDir: string, relativePath: string, force: boolean): Promise<"written" | "skipped"> {
   const source = path.join(bundledRoot(), relativePath);
   const target = installTarget(relativePath, configDir);
@@ -82,6 +78,10 @@ async function copyBundledFile(configDir: string, relativePath: string, force: b
 
   await copyFile(source, target);
   return "written";
+}
+
+function runtimeManagedPrompt(name: string): string {
+  return `Runtime-managed ${name} prompt. The installed package provides the latest bundled prompt content automatically.`;
 }
 
 function withClaudePatch(configDir: string): OpenCodeConfig {
@@ -118,7 +118,7 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
         mode: "subagent",
         hidden: false,
         model: "with-claude/sonnet",
-        prompt: promptReference(configDir, ".opencode/agents/implClaude.md"),
+        prompt: runtimeManagedPrompt("implClaude"),
         tools: {}
       },
       planClaude: {
@@ -126,7 +126,7 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
         mode: "subagent",
         hidden: false,
         model: "with-claude/opus",
-        prompt: promptReference(configDir, ".opencode/agents/planClaude.md"),
+        prompt: runtimeManagedPrompt("planClaude"),
         tools: {}
       },
       reviewClaude: {
@@ -134,11 +134,29 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
         mode: "subagent",
         hidden: false,
         model: "with-claude/sonnet",
-        prompt: promptReference(configDir, ".opencode/agents/reviewClaude.md"),
+        prompt: runtimeManagedPrompt("reviewClaude"),
         tools: {}
       }
     }
   };
+}
+
+async function writeOverrideConfig(configDir: string, force: boolean): Promise<{ path: string; outcome: "written" | "kept" }> {
+  const relativePath = ".opencode/opencode-with-claude.jsonc";
+  const target = installTarget(relativePath, configDir);
+  await mkdir(path.dirname(target), { recursive: true });
+
+  try {
+    if (!force) {
+      await readFile(target, "utf8");
+      return { path: target, outcome: "kept" };
+    }
+  } catch {
+    // target missing; continue
+  }
+
+  await writeFile(target, bundledOverrideTemplate(), "utf8");
+  return { path: target, outcome: "written" };
 }
 
 function deepMerge(base: OpenCodeConfig, patch: OpenCodeConfig): OpenCodeConfig {
@@ -184,10 +202,6 @@ export async function installOpenCodeWithClaude(options: InstallOptions): Promis
   const skipped: string[] = [];
 
   for (const relativePath of [
-    ".opencode/opencode-with-claude.jsonc",
-    ".opencode/agents/implClaude.md",
-    ".opencode/agents/planClaude.md",
-    ".opencode/agents/reviewClaude.md",
     ".opencode/command/implClaude.md",
     ".opencode/command/planClaude.md",
     ".opencode/command/reviewClaude.md"
@@ -197,12 +211,17 @@ export async function installOpenCodeWithClaude(options: InstallOptions): Promis
   }
 
   const configPath = await writeGlobalConfig(options.configDir);
+  const overrideConfig = await writeOverrideConfig(options.configDir, options.force);
+  const bootstrap = ensurePluginRuntimeBootstrap(options.configDir);
 
   return [
     `Installed ${PACKAGE_NAME} into global OpenCode config: ${options.configDir}`,
     copied.length > 0 ? `Wrote: ${copied.join(", ")}` : "Wrote: (none)",
     skipped.length > 0 ? `Kept existing: ${skipped.join(", ")}` : "Kept existing: (none)",
     `Updated global config: ${path.relative(options.configDir, configPath) || "opencode.json"}`,
+    `${overrideConfig.outcome === "written" ? "Wrote" : "Kept existing"}: ${path.relative(options.configDir, overrideConfig.path) || ".opencode/opencode-with-claude.jsonc"}`,
+    `${bootstrap.dependencyChanged ? "Updated" : "Kept existing"}: package.json plugin dependency`,
+    `${bootstrap.shimChanged ? "Updated" : "Kept existing"}: plugins/with-claude-plugin.mjs`,
     "Next: open OpenCode anywhere and use @planClaude / @implClaude / @reviewClaude."
   ].join("\n");
 }

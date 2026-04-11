@@ -1,5 +1,4 @@
 import { readFile } from "node:fs/promises";
-import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -10,170 +9,13 @@ import { loadEnv } from "../config/env.js";
 import type { OrchestrationHost } from "../orchestrator/host.js";
 import { createOrchestrationHost } from "../orchestrator/host-factory.js";
 import type { WorkflowTask } from "../types/task.js";
+import { createAutoUpdateHook } from "./auto-update-hook.js";
+import { loadBundledSubagent } from "./bundled-subagent.js";
+import { createRuntimeAssetSyncHook } from "./runtime-asset-sync.js";
+import { loadWithClaudeConfig } from "./with-claude-config.js";
 
 const schema = tool.schema;
 const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
-
-type LoadedSubagent = {
-  name: string;
-  description: string;
-  mode: "subagent" | "primary" | "all";
-  prompt: string;
-  tools?: Record<string, boolean>;
-};
-
-type WithClaudeAgentConfig = {
-  description?: string;
-  mode?: "subagent" | "primary" | "all";
-  hidden?: boolean;
-  model?: string;
-  prompt?: string;
-  tools?: Record<string, boolean>;
-};
-
-type WithClaudeConfig = {
-  agent?: Record<string, WithClaudeAgentConfig>;
-  claudeCli?: ClaudeCliConfig;
-};
-
-function defaultOpenCodeConfigDir(): string {
-  const xdgConfigHome = process.env.XDG_CONFIG_HOME?.trim();
-  return xdgConfigHome
-    ? path.resolve(xdgConfigHome, "opencode")
-    : path.join(os.homedir(), ".config", "opencode");
-}
-
-async function readWithClaudeConfigFile(filePath: string): Promise<WithClaudeConfig> {
-  try {
-    const content = await readFile(filePath, "utf8");
-    const parsed = parseJsoncObject(content) as unknown;
-    return parsed && typeof parsed === "object" ? (parsed as WithClaudeConfig) : {};
-  } catch {
-    return {};
-  }
-}
-
-function mergeWithClaudeConfig(base: WithClaudeConfig, override: WithClaudeConfig): WithClaudeConfig {
-  const mergedAgent = base.agent || override.agent
-    ? Object.fromEntries(
-        Array.from(new Set([...Object.keys(base.agent ?? {}), ...Object.keys(override.agent ?? {})])).map((agentName) => [
-            agentName,
-            {
-              ...(base.agent?.[agentName] ?? {}),
-              ...(override.agent?.[agentName] ?? {})
-            }
-          ])
-      )
-    : undefined;
-
-  const mergedClaudeCli = base.claudeCli || override.claudeCli
-    ? {
-      ...(base.claudeCli ?? {}),
-      ...(override.claudeCli ?? {}),
-      roles: Object.fromEntries(
-        Array.from(
-          new Set([
-            ...Object.keys(base.claudeCli?.roles ?? {}),
-            ...Object.keys(override.claudeCli?.roles ?? {})
-          ])
-        ).map((roleName) => [
-            roleName,
-            {
-              ...(base.claudeCli?.roles?.[roleName as keyof NonNullable<typeof base.claudeCli.roles>] ?? {}),
-              ...(override.claudeCli?.roles?.[roleName as keyof NonNullable<typeof override.claudeCli.roles>] ?? {})
-            }
-          ])
-      )
-    }
-    : undefined;
-
-  return {
-    ...(base ?? {}),
-    ...(override ?? {}),
-    ...(mergedAgent ? { agent: mergedAgent } : {}),
-    ...(mergedClaudeCli ? { claudeCli: mergedClaudeCli } : {})
-  };
-}
-
-async function loadBundledSubagent(name: string): Promise<LoadedSubagent> {
-  const filePath = path.join(packageRoot, ".opencode", "agents", `${name}.md`);
-  const content = await readFile(filePath, "utf8");
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) {
-    throw new Error(`Invalid subagent manifest: ${filePath}`);
-  }
-
-  const frontmatter = match[1];
-  const prompt = match[2].trim();
-  let description = "";
-  let mode: LoadedSubagent["mode"] = "subagent";
-  const tools: Record<string, boolean> = {};
-  let inTools = false;
-  let currentToolIndent = -1;
-
-  for (const rawLine of frontmatter.split("\n")) {
-    const line = rawLine.trim();
-    const indent = rawLine.match(/^\s*/)?.[0].length ?? 0;
-    if (line.startsWith("description:")) {
-      description = line.slice("description:".length).trim();
-      inTools = false;
-      currentToolIndent = -1;
-      continue;
-    }
-    if (line.startsWith("mode:")) {
-      const parsed = line.slice("mode:".length).trim();
-      if (parsed === "subagent" || parsed === "primary" || parsed === "all") {
-        mode = parsed;
-      }
-      inTools = false;
-      currentToolIndent = -1;
-      continue;
-    }
-    if (line === "tools:") {
-      inTools = true;
-      currentToolIndent = -1;
-      continue;
-    }
-    if (inTools && line.includes(":")) {
-      const [toolName, rawValue] = line.split(/:\s*/, 2);
-      if (toolName) {
-        tools[toolName.trim()] = rawValue ? rawValue.trim() === "true" : true;
-        currentToolIndent = indent;
-      }
-      continue;
-    }
-    if (inTools && line.length > 0 && currentToolIndent >= 0 && indent > currentToolIndent) {
-      continue;
-    }
-    inTools = false;
-    currentToolIndent = -1;
-  }
-
-  return {
-    name,
-    description,
-    mode,
-    prompt,
-    tools: Object.keys(tools).length > 0 ? tools : undefined
-  };
-}
-
-async function loadWithClaudeConfig(projectRoot: string): Promise<WithClaudeConfig> {
-  const globalFilePath = path.join(defaultOpenCodeConfigDir(), ".opencode", "opencode-with-claude.jsonc");
-  const projectFilePath = path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc");
-  const [globalConfig, projectConfig] = await Promise.all([
-    readWithClaudeConfigFile(globalFilePath),
-    readWithClaudeConfigFile(projectFilePath)
-  ]);
-
-  return mergeWithClaudeConfig(globalConfig, projectConfig);
-}
-
-function parseJsoncObject(content: string): unknown {
-  const withoutBlockComments = content.replace(/\/\*[\s\S]*?\*\//g, "");
-  const withoutLineComments = withoutBlockComments.replace(/^\s*\/\/.*$/gm, "");
-  return JSON.parse(withoutLineComments);
-}
 
 function formatTaskList(tasks: WorkflowTask[]): string {
   if (tasks.length === 0) {
@@ -314,14 +156,20 @@ function resolvePluginEnv(directory: string, worktree: string) {
 const AgentWorkflowPlugin: Plugin = async (input) => {
   const env = resolvePluginEnv(input.directory, input.worktree);
   const host = createOrchestrationHost(env);
-  const withClaudeConfig = await loadWithClaudeConfig(env.projectRoot);
+  const withClaudeConfig = await loadWithClaudeConfig(env.projectRoot) as { agent?: Record<string, { description?: string; mode?: "subagent" | "primary" | "all"; hidden?: boolean; model?: string; prompt?: string; tools?: Record<string, boolean> }>; claudeCli?: ClaudeCliConfig };
   const subagents = await Promise.all([
     loadBundledSubagent("implClaude"),
     loadBundledSubagent("planClaude"),
     loadBundledSubagent("reviewClaude")
   ]);
+  const assetSyncHook = createRuntimeAssetSyncHook(input);
+  const autoUpdateHook = createAutoUpdateHook(input);
 
   return {
+    event: async ({ event }) => {
+      await assetSyncHook.event({ event });
+      await autoUpdateHook.event({ event });
+    },
     config: async (config) => {
       const existing = config.agent ?? {};
       config.agent = { ...existing };
