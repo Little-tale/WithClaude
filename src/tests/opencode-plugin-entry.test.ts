@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtemp, mkdir, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -395,6 +395,148 @@ test("plugin preserves global role args and agent prompt fields during partial p
     const context = await getTaskContext!.execute!({ taskId });
     assert.match(context, /haiku:plan/);
   } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
+test("session startup syncs bundled prompts and migrates legacy managed config into an override file", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-sync-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-sync-xdg-"));
+  const configRoot = path.join(xdgConfigHome, "opencode");
+  const legacyConfigPath = path.join(configRoot, ".opencode", "opencode-with-claude.jsonc");
+  const staleAgentPath = path.join(configRoot, ".opencode", "agents", "planClaude.md");
+  const staleCommandPath = path.join(configRoot, ".opencode", "command", "planClaude.md");
+  const pluginPackageJsonPath = path.join(configRoot, "package.json");
+  const pluginShimPath = path.join(configRoot, "plugins", "with-claude-plugin.mjs");
+
+  const bundledConfig = await readFile(path.join(process.cwd(), ".opencode", "opencode-with-claude.jsonc"), "utf8");
+  await writeWithClaudeConfig(legacyConfigPath, bundledConfig);
+  await writeWithClaudeConfig(staleAgentPath, "stale-agent\n");
+  await writeWithClaudeConfig(staleCommandPath, "stale-command\n");
+
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+  process.env.DATA_DIR = "./data";
+
+  const toastCalls: string[] = [];
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {
+        tui: {
+          showToast: async (input: { body: { title: string } }) => {
+            toastCalls.push(input.body.title);
+          }
+        }
+      } as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    assert.equal(typeof hooks.event, "function");
+    await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+
+    const migratedConfig = await readFile(legacyConfigPath, "utf8");
+    const syncedAgent = await readFile(staleAgentPath, "utf8");
+    const syncedCommand = await readFile(staleCommandPath, "utf8");
+    const pluginPackageJson = await readFile(pluginPackageJsonPath, "utf8");
+    const pluginShim = await readFile(pluginShimPath, "utf8");
+    const bundledAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "planClaude.md"), "utf8");
+    const bundledCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "planClaude.md"), "utf8");
+
+    assert.match(migratedConfig, /Optional user overrides only/);
+    assert.equal(syncedAgent, bundledAgent);
+    assert.equal(syncedCommand, bundledCommand);
+    assert.match(pluginPackageJson, /"@little_tale\/opencode-with-claude": "latest"/);
+    assert.match(pluginShim, /@little_tale\/opencode-with-claude\/plugin/);
+    assert.deepEqual(toastCalls, ["WithClaude Updated"]);
+  } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
+test("session startup auto-updates the plugin package when a newer latest version exists", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-update-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-update-xdg-"));
+  const configRoot = path.join(xdgConfigHome, "opencode");
+
+  await writeWithClaudeConfig(path.join(configRoot, "package.json"), JSON.stringify({ dependencies: { "@little_tale/opencode-with-claude": "latest" } }, null, 2));
+  await writeWithClaudeConfig(path.join(configRoot, "node_modules", "@little_tale", "opencode-with-claude", "package.json"), JSON.stringify({ version: "0.1.1" }, null, 2));
+
+  const originalFetch = globalThis.fetch;
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+  process.env.DATA_DIR = "./data";
+  const toastCalls: string[] = [];
+  const shellCalls: string[] = [];
+
+  globalThis.fetch = (async () => new Response(JSON.stringify({ version: "0.1.2" }), { status: 200 })) as typeof fetch;
+
+  try {
+    const shell = Object.assign(
+      ((strings: TemplateStringsArray, ...expressions: Array<{ toString(): string } | string>) => {
+        shellCalls.push(String.raw(strings, ...expressions));
+        return {
+          exitCode: 0,
+          stdout: Buffer.from(""),
+          stderr: Buffer.from(""),
+          text: () => "",
+          json: () => ({}),
+          arrayBuffer: () => new ArrayBuffer(0),
+          bytes: () => new Uint8Array(),
+          blob: () => new Blob(),
+          cwd: () => this,
+          env: () => this,
+          quiet: () => this,
+          lines: async function* () {},
+          nothrow: () => this,
+          throws: () => this,
+          then: undefined
+        } as never;
+      }) as never,
+      {
+        cwd() {
+          return this;
+        },
+        env() {
+          return this;
+        },
+        nothrow() {
+          return this;
+        },
+        throws() {
+          return this;
+        },
+        braces() {
+          return [];
+        },
+        escape(input: string) {
+          return input;
+        }
+      }
+    );
+
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {
+        tui: {
+          showToast: async (input: { body: { title: string } }) => {
+            toastCalls.push(input.body.title);
+          }
+        }
+      } as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: shell
+    });
+
+    await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+
+    assert.ok(shellCalls.some((call) => call.includes("bun add @little_tale/opencode-with-claude@latest")));
+    assert.ok(toastCalls.includes("WithClaude Auto-updated"));
+  } finally {
+    globalThis.fetch = originalFetch;
     process.env = { ...originalEnv };
   }
 });
