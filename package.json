@@ -2,6 +2,7 @@
   "name": "@little_tale/opencode-with-claude",
   "version": "0.1.2",
   "private": false,
+  "license": "MIT",
   "description": "Claude CLI provider and workflow plugin surfaces for OpenCode.",
   "repository": {
     "type": "git",

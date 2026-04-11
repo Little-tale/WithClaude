@@ -1,6 +1,6 @@
 # Agent Install Instructions
 
-This file is for LLM agents working inside a cloned copy of this repository.
+This file is for LLM agents working from either a cloned copy of this repository or the installed package contents.
 
 ## Goal
 
