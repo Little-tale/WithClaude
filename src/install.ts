@@ -3,6 +3,7 @@ import os from "node:os";
 import path from "node:path";
 import process from "node:process";
 
+import { defaultOpenCodeConfigDir } from "./opencode/default-config-dir.js";
 import { ensurePluginRuntimeBootstrap } from "./opencode/plugin-runtime-bootstrap.js";
 import { bundledOverrideTemplate } from "./opencode/override-template.js";
 import { PACKAGE_NAME } from "./package-identity.js";
@@ -20,10 +21,7 @@ type OpenCodeConfig = {
 };
 
 function defaultConfigDir(): string {
-  const xdgConfigHome = process.env.XDG_CONFIG_HOME?.trim();
-  return xdgConfigHome
-    ? path.resolve(xdgConfigHome, "opencode")
-    : path.join(os.homedir(), ".config", "opencode");
+  return defaultOpenCodeConfigDir();
 }
 
 export function parseArgs(argv: string[]): InstallOptions {

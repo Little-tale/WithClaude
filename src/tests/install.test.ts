@@ -57,6 +57,32 @@ test("installer default config dir honors XDG_CONFIG_HOME", async () => {
   }
 });
 
+test("installer default config dir honors OPENCODE_CONFIG_DIR before XDG_CONFIG_HOME", async () => {
+  const originalConfigDir = process.env.OPENCODE_CONFIG_DIR;
+  const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
+  const configDir = await mkdtemp(path.join(os.tmpdir(), "agentwf-install-configdir-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-install-xdg-priority-"));
+  process.env.OPENCODE_CONFIG_DIR = configDir;
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+
+  try {
+    const parsed = parseArgs(["install"]);
+    assert.equal(parsed.configDir, configDir);
+  } finally {
+    if (originalConfigDir === undefined) {
+      delete process.env.OPENCODE_CONFIG_DIR;
+    } else {
+      process.env.OPENCODE_CONFIG_DIR = originalConfigDir;
+    }
+
+    if (originalXdgConfigHome === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
+    }
+  }
+});
+
 test("built installer entrypoint keeps a node shebang", async () => {
   const builtInstaller = await readFile(path.join(process.cwd(), "dist", "cli.js"), "utf8");
   assert.match(builtInstaller, /^#!\/usr\/bin\/env node/);

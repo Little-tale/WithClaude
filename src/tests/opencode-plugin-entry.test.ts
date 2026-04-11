@@ -10,6 +10,20 @@ const originalEnv = { ...process.env };
 
 type PluginToolMap = Record<string, { execute?: (args: Record<string, unknown>, context?: unknown) => Promise<string> }>;
 
+async function waitFor(assertion: () => void | Promise<void>, attempts = 20): Promise<void> {
+  let lastError: unknown;
+  for (let attempt = 0; attempt < attempts; attempt += 1) {
+    try {
+      await assertion();
+      return;
+    } catch (error) {
+      lastError = error;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+  }
+  throw lastError;
+}
+
 async function writeWithClaudeConfig(filePath: string, content: string): Promise<void> {
   await mkdir(path.dirname(filePath), { recursive: true });
   await writeFile(filePath, content, "utf8");
@@ -436,6 +450,14 @@ test("session startup syncs bundled prompts and migrates legacy managed config i
 
     assert.equal(typeof hooks.event, "function");
     await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+    await waitFor(async () => {
+      const syncedAgent = await readFile(staleAgentPath, "utf8");
+      const syncedCommand = await readFile(staleCommandPath, "utf8");
+      const bundledAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "planClaude.md"), "utf8");
+      const bundledCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "planClaude.md"), "utf8");
+      assert.equal(syncedAgent, bundledAgent);
+      assert.equal(syncedCommand, bundledCommand);
+    });
 
     const migratedConfig = await readFile(legacyConfigPath, "utf8");
     const syncedAgent = await readFile(staleAgentPath, "utf8");
@@ -532,9 +554,87 @@ test("session startup auto-updates the plugin package when a newer latest versio
     });
 
     await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+    await waitFor(() => {
+      assert.ok(shellCalls.some((call) => call.includes("@little_tale/opencode-with-claude@latest")));
+      assert.ok(toastCalls.includes("WithClaude Auto-updated"));
+    });
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.env = { ...originalEnv };
+  }
+});
 
-    assert.ok(shellCalls.some((call) => call.includes("bun add @little_tale/opencode-with-claude@latest")));
-    assert.ok(toastCalls.includes("WithClaude Auto-updated"));
+test("session startup warns when automatic update fails", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-update-fail-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-update-fail-xdg-"));
+  const configRoot = path.join(xdgConfigHome, "opencode");
+
+  await writeWithClaudeConfig(path.join(configRoot, "package.json"), JSON.stringify({ dependencies: { "@little_tale/opencode-with-claude": "latest" } }, null, 2));
+  await writeWithClaudeConfig(path.join(configRoot, "node_modules", "@little_tale", "opencode-with-claude", "package.json"), JSON.stringify({ version: "0.1.1" }, null, 2));
+
+  const originalFetch = globalThis.fetch;
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+  process.env.DATA_DIR = "./data";
+  const toastCalls: string[] = [];
+
+  globalThis.fetch = (async () => new Response(JSON.stringify({ version: "0.1.2" }), { status: 200 })) as typeof fetch;
+
+  try {
+    const shell = Object.assign(
+      ((strings: TemplateStringsArray, ...expressions: Array<{ toString(): string } | string>) => {
+        void String.raw(strings, ...expressions);
+        return Promise.resolve({
+          exitCode: 1,
+          stdout: Buffer.from(""),
+          stderr: Buffer.from("failed"),
+          text: () => "",
+          json: () => ({}),
+          arrayBuffer: () => new ArrayBuffer(0),
+          bytes: () => new Uint8Array(),
+          blob: () => new Blob()
+        });
+      }) as never,
+      {
+        cwd() {
+          return this;
+        },
+        env() {
+          return this;
+        },
+        nothrow() {
+          return this;
+        },
+        throws() {
+          return this;
+        },
+        braces() {
+          return [];
+        },
+        escape(input: string) {
+          return input;
+        }
+      }
+    );
+
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {
+        tui: {
+          showToast: async (input: { body: { title: string } }) => {
+            toastCalls.push(input.body.title);
+          }
+        }
+      } as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: shell
+    });
+
+    await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+    await waitFor(() => {
+      assert.ok(toastCalls.includes("WithClaude Update Available"));
+    });
   } finally {
     globalThis.fetch = originalFetch;
     process.env = { ...originalEnv };
