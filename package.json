@@ -1,6 +1,6 @@
 {
   "name": "@little_tale/opencode-with-claude",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": false,
   "description": "Claude CLI provider and workflow plugin surfaces for OpenCode.",
   "repository": {
