@@ -1,5 +1,6 @@
 import { copyFile, mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import type { PluginInput } from "@opencode-ai/plugin";
 
@@ -9,7 +10,7 @@ import { ensurePluginRuntimeBootstrap } from "./plugin-runtime-bootstrap.js";
 import { isTopLevelSessionCreated, type SessionEventLike } from "./session-event.js";
 import { parseJsoncObject, readBundledDefaultConfig } from "./with-claude-config.js";
 
-const packageRoot = path.resolve(new URL("../..", import.meta.url).pathname);
+const packageRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 async function syncBundledFile(configDir: string, relativePath: string): Promise<boolean> {
   const source = path.join(packageRoot, relativePath);
@@ -39,7 +40,12 @@ async function migrateLegacyOverrideFile(configDir: string): Promise<boolean> {
     return true;
   }
 
-  const existingParsed = parseJsoncObject(existingContent);
+  let existingParsed: unknown;
+  try {
+    existingParsed = parseJsoncObject(existingContent);
+  } catch {
+    return false;
+  }
   const bundledParsed = await readBundledDefaultConfig();
   if (JSON.stringify(existingParsed) !== JSON.stringify(bundledParsed)) {
     return false;

@@ -1,9 +1,10 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
 import { defaultOpenCodeConfigDir } from "./default-config-dir.js";
 
-const packageRoot = path.resolve(new URL("../..", import.meta.url).pathname);
+const packageRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 export type WithClaudeAgentConfig = {
   description?: string;

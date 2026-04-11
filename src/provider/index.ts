@@ -12,7 +12,11 @@ function bootstrapPluginRuntimeOnce(): void {
     return;
   }
   bootstrappedRuntime = true;
-  ensurePluginRuntimeBootstrap(defaultOpenCodeConfigDir());
+  try {
+    ensurePluginRuntimeBootstrap(defaultOpenCodeConfigDir());
+  } catch {
+    // Provider creation should not fail just because plugin bootstrap cannot write.
+  }
 }
 
 export interface WithClaudeProvider extends ProviderV2 {

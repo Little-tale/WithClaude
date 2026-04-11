@@ -1,7 +1,8 @@
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 
-const packageRoot = path.resolve(new URL("../..", import.meta.url).pathname);
+const packageRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 export type LoadedSubagent = {
   name: string;
