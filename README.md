@@ -57,12 +57,24 @@ By default it uses `XDG_CONFIG_HOME/opencode` when `XDG_CONFIG_HOME` is set; oth
 
 It will:
 
-- create `~/.config/opencode/.opencode/opencode-with-claude.jsonc`
-- copy bundled Claude subagent prompts into `~/.config/opencode/.opencode/agents/`
+- create `~/.config/opencode/.opencode/opencode-with-claude.jsonc` as a user override file
+- create `~/.config/opencode/package.json` with the package as a managed local-plugin dependency
+- create `~/.config/opencode/plugins/with-claude-plugin.mjs` so the plugin hook surface loads on startup
 - copy bundled reusable command prompts into `~/.config/opencode/.opencode/command/`
 - create or merge `~/.config/opencode/opencode.json`
 
 If `~/.config/opencode/opencode.json` already exists, the installer preserves existing top-level fields and merges the `with-claude` provider and Claude subagents into that global config.
+
+The bundled Claude subagent prompts and default role config now load from the installed npm package at runtime, so new package releases can update those defaults without re-copying them into user config.
+
+OpenCode also loads the package's plugin hook surface through the generated local plugin shim. On session startup, that hook:
+
+- bootstraps older installs into the managed plugin workspace if needed
+- syncs bundled prompts/commands from the installed package
+- checks npm for a newer `latest` release when the managed dependency is not pinned
+- runs the package-manager update in `~/.config/opencode` automatically when a newer release exists
+
+If a newer package is installed during startup, OpenCode will notify the user. A restart may be needed for the just-installed runtime to take effect immediately in the current session.
 
 ## Prerequisites
 
@@ -137,7 +149,7 @@ Use it to change:
 - Claude CLI arguments
 - timeouts and related runtime options
 
-The plugin reads this global config by default. If a workspace also has `.opencode/opencode-with-claude.jsonc`, that project-local file overrides the global values for that workspace only. Partial workspace overrides keep the remaining global role settings unless they explicitly replace them.
+The plugin loads bundled package defaults first, then applies this global file as an override. If a workspace also has `.opencode/opencode-with-claude.jsonc`, that project-local file overrides the global values for that workspace only. Partial workspace overrides keep the remaining bundled/global settings unless they explicitly replace them.
 
 ## Package surfaces
 
@@ -194,9 +206,8 @@ Project-local development files such as `src/`, `Plan/`, `data-*`, and local pro
 Remove the installed files from your global OpenCode config:
 
 - `~/.config/opencode/.opencode/opencode-with-claude.jsonc`
-- `~/.config/opencode/.opencode/agents/implClaude.md`
-- `~/.config/opencode/.opencode/agents/planClaude.md`
-- `~/.config/opencode/.opencode/agents/reviewClaude.md`
+- `~/.config/opencode/package.json` (or remove just the `@little_tale/opencode-with-claude` dependency)
+- `~/.config/opencode/plugins/with-claude-plugin.mjs`
 - `~/.config/opencode/.opencode/command/implClaude.md`
 - `~/.config/opencode/.opencode/command/planClaude.md`
 - `~/.config/opencode/.opencode/command/reviewClaude.md`
