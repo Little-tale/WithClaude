@@ -27,9 +27,20 @@ After installation, the user's OpenCode config should include:
 - `@implClaude`
 - `@reviewClaude`
 
-The installer also writes the bundled role config to:
+The installer also bootstraps a managed local plugin workspace under the user's OpenCode config so startup hooks can keep bundled prompts and the npm package up to date automatically.
+
+The installer writes the user override file to:
 
 - `~/.config/opencode/.opencode/opencode-with-claude.jsonc`
+
+That file is now an override file for user customizations. Bundled default role config and subagent prompts load from the installed npm package at runtime so package updates can refresh them automatically.
+
+The install also creates:
+
+- `~/.config/opencode/package.json`
+- `~/.config/opencode/plugins/with-claude-plugin.mjs`
+
+Those files let OpenCode load the plugin hook surface at startup and auto-update the package when a newer `latest` release is available.
 
 If `XDG_CONFIG_HOME` is set, use `$XDG_CONFIG_HOME/opencode` instead of `~/.config/opencode`.
 

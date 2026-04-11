@@ -13,13 +13,17 @@ test("installer creates baseline OpenCode config and bundled assets in a new pro
 
   const opencodeConfig = await readFile(path.join(configDir, "opencode.json"), "utf8");
   const roleConfig = await readFile(path.join(configDir, ".opencode", "opencode-with-claude.jsonc"), "utf8");
-  const agentPrompt = await readFile(path.join(configDir, ".opencode", "agents", "planClaude.md"), "utf8");
+  const commandPrompt = await readFile(path.join(configDir, ".opencode", "command", "planClaude.md"), "utf8");
+  const pluginPackageJson = await readFile(path.join(configDir, "package.json"), "utf8");
+  const pluginShim = await readFile(path.join(configDir, "plugins", "with-claude-plugin.mjs"), "utf8");
 
   assert.match(output, /Installed @little_tale\/opencode-with-claude into global OpenCode config/);
   assert.match(opencodeConfig, /"npm": "@little_tale\/opencode-with-claude"/);
-  assert.match(opencodeConfig, /\.opencode\/agents\/planClaude\.md/);
-  assert.match(roleConfig, /"claudeCli"/);
-  assert.match(agentPrompt, /run_claude_plan/);
+  assert.match(opencodeConfig, /Runtime-managed planClaude prompt/);
+  assert.match(roleConfig, /Optional user overrides only/);
+  assert.match(commandPrompt, /@planClaude/);
+  assert.match(pluginPackageJson, /"@little_tale\/opencode-with-claude": "latest"/);
+  assert.match(pluginShim, /@little_tale\/opencode-with-claude\/plugin/);
 });
 
 test("installer preserves existing global config fields while merging with-claude setup", async () => {
@@ -45,6 +49,32 @@ test("installer default config dir honors XDG_CONFIG_HOME", async () => {
     const parsed = parseArgs(["install"]);
     assert.equal(parsed.configDir, path.join(xdgConfigHome, "opencode"));
   } finally {
+    if (originalXdgConfigHome === undefined) {
+      delete process.env.XDG_CONFIG_HOME;
+    } else {
+      process.env.XDG_CONFIG_HOME = originalXdgConfigHome;
+    }
+  }
+});
+
+test("installer default config dir honors OPENCODE_CONFIG_DIR before XDG_CONFIG_HOME", async () => {
+  const originalConfigDir = process.env.OPENCODE_CONFIG_DIR;
+  const originalXdgConfigHome = process.env.XDG_CONFIG_HOME;
+  const configDir = await mkdtemp(path.join(os.tmpdir(), "agentwf-install-configdir-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-install-xdg-priority-"));
+  process.env.OPENCODE_CONFIG_DIR = configDir;
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+
+  try {
+    const parsed = parseArgs(["install"]);
+    assert.equal(parsed.configDir, configDir);
+  } finally {
+    if (originalConfigDir === undefined) {
+      delete process.env.OPENCODE_CONFIG_DIR;
+    } else {
+      process.env.OPENCODE_CONFIG_DIR = originalConfigDir;
+    }
+
     if (originalXdgConfigHome === undefined) {
       delete process.env.XDG_CONFIG_HOME;
     } else {
