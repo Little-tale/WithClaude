@@ -16,7 +16,9 @@
     ".opencode/agents/**/*",
     ".opencode/command/**/*",
     ".opencode/opencode-with-claude.jsonc",
+    "AGENT_INSTALL.md",
     "README.md",
+    "LICENSE",
     ".env.example"
   ],
   "main": "dist/index.js",
