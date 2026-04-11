@@ -39,7 +39,11 @@ After that, releasing a new version is just:
 
 ### For LLM agents
 
-Tell the agent to run:
+Tell the agent to read `./AGENT_INSTALL.md` in this repository and follow it.
+
+The local markdown file is the source of truth for agent-driven installation, so the setup flow does not depend on an external install link.
+
+The install step inside that file is:
 
 ```bash
 npx @little_tale/opencode-with-claude install
@@ -157,6 +161,13 @@ Useful scripts:
 - `npm run build`
 - `npm test`
 
+## Repository docs
+
+- `README.md` - human-oriented overview and package behavior
+- `AGENT_INSTALL.md` - agent-readable install instructions
+- `CONTRIBUTION.md` - contribution workflow for changes and PRs
+- `LICENSE` - project license terms
+
 ## Package contents
 
 The published tarball intentionally ships only runtime/package assets:
@@ -165,7 +176,9 @@ The published tarball intentionally ships only runtime/package assets:
 - `.opencode/agents/`
 - `.opencode/command/`
 - `.opencode/opencode-with-claude.jsonc`
+- `AGENT_INSTALL.md`
 - `README.md`
+- `LICENSE`
 - `.env.example`
 
 Project-local development files such as `src/`, `Plan/`, `data-*`, and local project config are not part of the intended install surface.
