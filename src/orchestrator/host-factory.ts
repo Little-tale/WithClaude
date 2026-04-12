@@ -21,7 +21,12 @@ export function createOrchestrationHost(
       return orchestrator.createTask(input);
     },
     approveOnly: (taskId, approverId) => orchestrator.approveTask(taskId, approverId),
-    savePlanRevision: (taskId, actorId, planText) => orchestrator.applyPlanRevision(taskId, actorId, planText),
+    async savePlanRevision(taskId, actorId, planText) {
+      let task = await orchestrator.applyPlanRevision(taskId, actorId, planText);
+      const artifactUpdate = await artifacts.syncPlanArtifact(task);
+      task = await orchestrator.updateArtifacts(task.taskId, actorId, artifactUpdate);
+      return task;
+    },
     rejectPlan: (taskId, actorId, reason) => orchestrator.rejectPlan(taskId, actorId, reason),
     saveImplementationSummary: (taskId, actorId, summary) => orchestrator.saveImplementationSummary(taskId, actorId, summary),
     recordReview: (taskId, actorId, decision, summary) => orchestrator.recordReview(taskId, actorId, decision, summary),
