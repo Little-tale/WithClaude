@@ -200,6 +200,67 @@ test("plugin tools return structured workflow-oriented text instead of raw json 
   }
 });
 
+test("run_claude_plan persists plan markdown artifacts without explicit markdown prompting", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-plan-artifact-"));
+  const claudeScript = path.join(projectRoot, "fake-claude-plan-artifact.js");
+  await writeFile(
+    claudeScript,
+    [
+      "#!/usr/bin/env node",
+      'process.stdout.write(JSON.stringify({ planText: "# Generated Plan\\n\\n- save by default" }));'
+    ].join("\n"),
+    "utf8"
+  );
+  await writeWithClaudeConfig(
+    path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc"),
+    withClaudeConfigJson({ command: process.execPath, commonArgs: [claudeScript] })
+  );
+  delete process.env.IMPLEMENTER_COMMAND;
+  delete process.env.IMPLEMENTER_ARGS;
+  process.env.DATA_DIR = "./data";
+
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {} as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    const createTask = (hooks.tool as PluginToolMap).create_task;
+    const runClaudePlan = (hooks.tool as PluginToolMap).run_claude_plan;
+    const getTaskContext = (hooks.tool as PluginToolMap).get_task_context;
+
+    assert.equal(typeof createTask?.execute, "function");
+    assert.equal(typeof runClaudePlan?.execute, "function");
+    assert.equal(typeof getTaskContext?.execute, "function");
+
+    const created = await createTask!.execute!({
+      title: "Artifact persistence task",
+      request: "Create and save a plan by default",
+      requesterId: "plugin-user"
+    });
+    const taskId = created.match(/- taskId: (task-[a-z0-9-]+)/i)?.[1];
+    assert.ok(taskId);
+
+    await runClaudePlan!.execute!({ taskId, actorId: "planClaude" });
+
+    const context = await getTaskContext!.execute!({ taskId });
+    const planPathMatch = context.match(/- plan: (.+)/);
+    assert.ok(planPathMatch);
+    assert.equal(planPathMatch[1], "plans/plan-v1.md");
+
+    const planBody = await readFile(path.join(projectRoot, "plans", "plan-v1.md"), "utf8");
+    assert.match(planBody, /# Plan ·/);
+    assert.match(planBody, /# Generated Plan/);
+    assert.match(planBody, /save by default/);
+  } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
 test("plugin falls back to global with-claude config and lets project config override it", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-global-"));
   const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-xdg-"));
@@ -474,6 +535,50 @@ test("session startup syncs bundled prompts and migrates legacy managed config i
     assert.match(pluginShim, /@little_tale\/opencode-with-claude\/plugin/);
     assert.deepEqual(toastCalls, ["WithClaude Updated"]);
   } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
+test("session startup skips auto-update when shell runner is unavailable", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-noshell-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-noshell-xdg-"));
+  const configRoot = path.join(xdgConfigHome, "opencode");
+
+  await writeWithClaudeConfig(path.join(configRoot, "package.json"), JSON.stringify({ dependencies: { "@little_tale/opencode-with-claude": "latest" } }, null, 2));
+  await writeWithClaudeConfig(path.join(configRoot, "node_modules", "@little_tale", "opencode-with-claude", "package.json"), JSON.stringify({ version: "0.1.1" }, null, 2));
+
+  const originalFetch = globalThis.fetch;
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+  process.env.DATA_DIR = "./data";
+  let fetchCalls = 0;
+  const toastCalls: string[] = [];
+
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response(JSON.stringify({ version: "0.1.2" }), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {
+        tui: {
+          showToast: async (input: { body: { title: string } }) => {
+            toastCalls.push(input.body.title);
+          }
+        }
+      } as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+    assert.equal(fetchCalls, 0);
+    assert.deepEqual(toastCalls, ["WithClaude Updated"]);
+  } finally {
+    globalThis.fetch = originalFetch;
     process.env = { ...originalEnv };
   }
 });

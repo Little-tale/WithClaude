@@ -14,6 +14,8 @@ You are planning only. Do not implement or review in this mode.
 
 `create_task` creates a draft task only. `run_claude_plan` is the Claude CLI-backed path that generates and saves the plan.
 
+This tool-backed save path is the default behavior, not an optional extra.
+
 ## Required behavior
 
 - Hand off to `@planClaude` instead of responding directly in the current primary agent.
@@ -21,6 +23,7 @@ You are planning only. Do not implement or review in this mode.
 - Produce a concrete implementation plan for the current request via Claude CLI.
 - Keep the plan structured and actionable.
 - Save the revised plan through `run_claude_plan` rather than replying with plan text only.
+- Treat a saved markdown artifact as the expected completion condition for planning.
 - If no task exists yet, create one explicitly instead of assuming hidden state.
 - If critical unknowns remain, say so clearly instead of faking certainty.
 
@@ -28,3 +31,5 @@ You are planning only. Do not implement or review in this mode.
 
 - Do not implement code in this mode.
 - Do not review code in this mode.
+- Do not stop after drafting plan text in-chat when `run_claude_plan` is available.
+- Do not treat an explicit user request for a markdown file as required; saving the plan is already part of the normal workflow.
