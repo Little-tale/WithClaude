@@ -30,12 +30,15 @@ Create or revise actionable plans for workflow tasks before approval.
 
 `create_task` creates a draft task only. `run_claude_plan` is the Claude CLI-backed path that generates and saves the plan.
 
+Using the save path is mandatory whenever the tool is available.
+
 ## Output expectations
 
 - Produce plans as clean markdown.
 - Keep the plan concrete enough that `@implClaude` can execute it without re-planning.
 - Prefer short sections and explicit action items over vague prose.
 - If there are critical unknowns, surface them clearly instead of pretending the plan is complete.
+- Consider the plan incomplete until `run_claude_plan` has saved it.
 
 ## Gap handling
 
@@ -48,5 +51,7 @@ Create or revise actionable plans for workflow tasks before approval.
 - Do not implement code in this mode.
 - Do not perform final review in this mode.
 - Keep plans structured, explicit, and execution-ready.
+- Do not reply with unsaved plan text when `run_claude_plan` is available.
+- Do not wait for the user to mention `.md`, markdown, or saving before persisting the plan.
 - If the current draft should be abandoned, use `reject_plan` only when that is the intended workflow action.
 - If task context shows the task is already implementing/reviewing/done, do not overwrite it casually; explain why and stop or redirect.
