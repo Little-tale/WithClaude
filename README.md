@@ -84,6 +84,8 @@ If a newer package is installed during startup, OpenCode will notify the user. A
 
 If Claude CLI is installed somewhere else, update the generated config accordingly.
 
+> Warning: this package depends on the local Claude CLI. If Anthropic changes Claude CLI policy and a user is banned, suspended, rate-limited, or otherwise restricted as a result of CLI usage, this repository does not accept responsibility for that outcome.
+
 ## What you get
 
 ### Provider models
@@ -103,6 +105,8 @@ The package installs these OpenCode subagents:
 - `@reviewClaude`
 
 Use them from the OpenCode UI / TUI through mention-style invocation.
+
+![Example OpenCode mention-style Claude subagents](docs/assets/claude-subagents-example.svg)
 
 ```text
 @planClaude
