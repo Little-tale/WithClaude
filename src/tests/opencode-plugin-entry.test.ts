@@ -539,6 +539,50 @@ test("session startup syncs bundled prompts and migrates legacy managed config i
   }
 });
 
+test("session startup skips auto-update when shell runner is unavailable", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-noshell-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-noshell-xdg-"));
+  const configRoot = path.join(xdgConfigHome, "opencode");
+
+  await writeWithClaudeConfig(path.join(configRoot, "package.json"), JSON.stringify({ dependencies: { "@little_tale/opencode-with-claude": "latest" } }, null, 2));
+  await writeWithClaudeConfig(path.join(configRoot, "node_modules", "@little_tale", "opencode-with-claude", "package.json"), JSON.stringify({ version: "0.1.1" }, null, 2));
+
+  const originalFetch = globalThis.fetch;
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+  process.env.DATA_DIR = "./data";
+  let fetchCalls = 0;
+  const toastCalls: string[] = [];
+
+  globalThis.fetch = (async () => {
+    fetchCalls += 1;
+    return new Response(JSON.stringify({ version: "0.1.2" }), { status: 200 });
+  }) as typeof fetch;
+
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {
+        tui: {
+          showToast: async (input: { body: { title: string } }) => {
+            toastCalls.push(input.body.title);
+          }
+        }
+      } as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+    assert.equal(fetchCalls, 0);
+    assert.deepEqual(toastCalls, ["WithClaude Updated"]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    process.env = { ...originalEnv };
+  }
+});
+
 test("session startup auto-updates the plugin package when a newer latest version exists", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-update-"));
   const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-update-xdg-"));

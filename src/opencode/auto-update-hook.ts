@@ -20,6 +20,10 @@ type UpdateCheckResult = {
   bootstrapped: boolean;
 };
 
+function hasShellRunner(ctx: PluginInput): ctx is PluginInput & { $: { cwd: (directory: string) => { nothrow: () => (strings: TemplateStringsArray, ...expressions: Array<{ toString(): string } | string>) => Promise<{ exitCode: number }> } } } {
+  return typeof ctx.$ === "function" && typeof (ctx.$ as { cwd?: unknown }).cwd === "function";
+}
+
 async function readJsonFile<T>(filePath: string): Promise<T | null> {
   try {
     return JSON.parse(await readFile(filePath, "utf8")) as T;
@@ -51,6 +55,9 @@ async function fetchLatestVersion(): Promise<string | null> {
 }
 
 async function runBunAdd(ctx: PluginInput, configDir: string): Promise<boolean> {
+  if (!hasShellRunner(ctx)) {
+    return false;
+  }
   const result = await ctx.$.cwd(configDir).nothrow()`bun add ${`${PACKAGE_NAME}@latest`}`;
   return result.exitCode === 0;
 }
@@ -77,6 +84,10 @@ export function createAutoUpdateHook(ctx: PluginInput) {
     const dependencySpec = await readDependencySpec(configDir);
     const bootstrapped = bootstrap.dependencyChanged || bootstrap.shimChanged;
     if (!dependencySpec || dependencySpec !== "latest") {
+      return { updated: false, bootstrapped };
+    }
+
+    if (!hasShellRunner(ctx)) {
       return { updated: false, bootstrapped };
     }
 
@@ -113,8 +124,7 @@ export function createAutoUpdateHook(ctx: PluginInput) {
       if (fired || !isTopLevelSessionCreated(event)) return { updated: false, bootstrapped: false };
       fired = true;
 
-      void runAutoUpdate(event);
-      return { updated: false, bootstrapped: false };
+      return runAutoUpdate(event);
     }
   };
 }
