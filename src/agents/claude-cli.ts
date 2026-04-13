@@ -11,6 +11,7 @@ export type ClaudeCliConfig = {
   command?: string;
   commonArgs?: string[];
   timeoutMs?: number;
+  defaultModel?: string;
   roles?: Partial<Record<ClaudeCliRole, ClaudeCliRoleConfig>>;
 };
 
@@ -31,8 +32,9 @@ export async function runClaudeCliJson<T>(options: {
   if (!args.includes("--json-schema")) {
     args.push("--json-schema", JSON.stringify(options.schema));
   }
-  if (roleConfig.model) {
-    args.push("--model", roleConfig.model);
+  const model = roleConfig.model ?? options.config.defaultModel;
+  if (model) {
+    args.push("--model", model);
   }
   if (roleConfig.args?.length) {
     args.push(...roleConfig.args.map((value) => replaceTemplate(value, options.templates ?? {})));
