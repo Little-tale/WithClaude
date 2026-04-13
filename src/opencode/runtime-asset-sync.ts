@@ -12,6 +12,32 @@ import { parseJsoncObject, readBundledDefaultConfig } from "./with-claude-config
 
 const packageRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
+const legacyManagedConfig = {
+  claudeCli: {
+    command: "claude",
+    commonArgs: ["-p", "--output-format", "json"],
+    timeoutMs: 900000,
+    roles: {
+      planClaude: {
+        model: "sonnet",
+        args: ["--permission-mode", "plan"]
+      },
+      implClaude: {
+        model: "sonnet",
+        args: ["--permission-mode", "acceptEdits", "--add-dir", "{{workspaceRoot}}"]
+      },
+      reviewClaude: {
+        model: "sonnet",
+        args: ["--permission-mode", "plan"]
+      }
+    }
+  }
+};
+
+function isLegacyManagedConfig(value: unknown): boolean {
+  return JSON.stringify(value) === JSON.stringify(legacyManagedConfig);
+}
+
 async function syncBundledFile(configDir: string, relativePath: string): Promise<boolean> {
   const source = path.join(packageRoot, relativePath);
   const target = path.join(configDir, relativePath);
@@ -47,7 +73,7 @@ async function migrateLegacyOverrideFile(configDir: string): Promise<boolean> {
     return false;
   }
   const bundledParsed = await readBundledDefaultConfig();
-  if (JSON.stringify(existingParsed) !== JSON.stringify(bundledParsed)) {
+  if (JSON.stringify(existingParsed) !== JSON.stringify(bundledParsed) && !isLegacyManagedConfig(existingParsed)) {
     return false;
   }
 
