@@ -156,7 +156,7 @@ function resolvePluginEnv(directory: string, worktree: string) {
 const AgentWorkflowPlugin: Plugin = async (input) => {
   const env = resolvePluginEnv(input.directory, input.worktree);
   const host = createOrchestrationHost(env);
-  const withClaudeConfig = await loadWithClaudeConfig(env.projectRoot) as { agent?: Record<string, { description?: string; mode?: "subagent" | "primary" | "all"; hidden?: boolean; model?: string; prompt?: string; tools?: Record<string, boolean> }>; claudeCli?: ClaudeCliConfig };
+  let withClaudeConfig = await loadWithClaudeConfig(env.projectRoot) as { agent?: Record<string, { description?: string; mode?: "subagent" | "primary" | "all"; hidden?: boolean; model?: string; prompt?: string; tools?: Record<string, boolean> }>; claudeCli?: ClaudeCliConfig };
   const subagents = await Promise.all([
     loadBundledSubagent("implClaude"),
     loadBundledSubagent("planClaude"),
@@ -168,6 +168,7 @@ const AgentWorkflowPlugin: Plugin = async (input) => {
   return {
     event: async ({ event }) => {
       await assetSyncHook.event({ event });
+      withClaudeConfig = await loadWithClaudeConfig(env.projectRoot) as typeof withClaudeConfig;
       await autoUpdateHook.event({ event });
     },
     config: async (config) => {

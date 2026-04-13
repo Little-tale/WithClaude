@@ -715,6 +715,86 @@ test("session startup preserves customized legacy config while migrating the exa
   }
 });
 
+test("session startup reloads migrated Claude config before running plan tools", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-sync-reload-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-sync-reload-xdg-"));
+  const configRoot = path.join(xdgConfigHome, "opencode");
+  const managedConfigPath = path.join(configRoot, ".opencode", "opencode-with-claude.jsonc");
+  const claudeScript = path.join(projectRoot, "fake-claude-sync-reload.js");
+
+  await writeFile(
+    claudeScript,
+    [
+      "#!/usr/bin/env node",
+      'const args = process.argv.slice(2);',
+      'const model = args.includes("--model") ? args[args.indexOf("--model") + 1] : "missing-model";',
+      'process.stdout.write(JSON.stringify({ planText: model }));'
+    ].join("\n"),
+    "utf8"
+  );
+
+  await writeWithClaudeConfig(
+    managedConfigPath,
+    JSON.stringify(
+      {
+        claudeCli: {
+          command: "claude",
+          commonArgs: ["-p", "--output-format", "json"],
+          timeoutMs: 900000,
+          roles: {
+            planClaude: { model: "sonnet", args: ["--permission-mode", "plan"] },
+            implClaude: { model: "sonnet", args: ["--permission-mode", "acceptEdits", "--add-dir", "{{workspaceRoot}}"] },
+            reviewClaude: { model: "sonnet", args: ["--permission-mode", "plan"] }
+          }
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  await writeWithClaudeConfig(
+    path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc"),
+    withClaudeConfigJson({ command: process.execPath, commonArgs: [claudeScript], defaultModel: "opus" })
+  );
+
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+  process.env.DATA_DIR = "./data";
+
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: { tui: { showToast: async () => {} } } as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+
+    const createTask = (hooks.tool as PluginToolMap).create_task;
+    const runClaudePlan = (hooks.tool as PluginToolMap).run_claude_plan;
+    const getTaskContext = (hooks.tool as PluginToolMap).get_task_context;
+
+    const created = await createTask!.execute!({
+      title: "Reload migrated config task",
+      request: "Use project defaultModel immediately after legacy migration",
+      requesterId: "plugin-user"
+    });
+    const taskId = created.match(/- taskId: (task-[a-z0-9-]+)/i)?.[1];
+    assert.ok(taskId);
+
+    await runClaudePlan!.execute!({ taskId, actorId: "planClaude" });
+    const context = await getTaskContext!.execute!({ taskId });
+
+    assert.match(context, /opus/);
+    assert.doesNotMatch(context, /sonnet/);
+  } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
 test("session startup skips auto-update when shell runner is unavailable", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-noshell-"));
   const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-noshell-xdg-"));
