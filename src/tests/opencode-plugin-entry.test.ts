@@ -32,19 +32,34 @@ async function writeWithClaudeConfig(filePath: string, content: string): Promise
 function withClaudeConfigJson(overrides: {
   command?: string;
   commonArgs?: string[];
-  planModel?: string;
-  implModel?: string;
-  reviewModel?: string;
+  defaultModel?: string | null;
+  planModel?: string | null;
+  implModel?: string | null;
+  reviewModel?: string | null;
   agentPlanModel?: string;
 } = {}): string {
   const {
     command = "claude",
     commonArgs = ["-p", "--output-format", "json"],
-    planModel = "sonnet",
-    implModel = "sonnet",
-    reviewModel = "sonnet",
     agentPlanModel
   } = overrides;
+
+  const readModelOverride = (key: "defaultModel" | "planModel" | "implModel" | "reviewModel", fallback?: string): string | undefined => {
+    if (!(key in overrides)) {
+      return fallback;
+    }
+    return overrides[key] ?? undefined;
+  };
+
+  const defaultModel = readModelOverride("defaultModel");
+  const planModel = readModelOverride("planModel", defaultModel ? undefined : "sonnet");
+  const implModel = readModelOverride("implModel", defaultModel ? undefined : "sonnet");
+  const reviewModel = readModelOverride("reviewModel", defaultModel ? undefined : "sonnet");
+
+  const roleConfig = (model: string | undefined, args: string[]) => ({
+    ...(model ? { model } : {}),
+    args
+  });
 
   return `${JSON.stringify(
     {
@@ -52,10 +67,11 @@ function withClaudeConfigJson(overrides: {
       claudeCli: {
         command,
         commonArgs,
+        ...(defaultModel ? { defaultModel } : {}),
         roles: {
-          planClaude: { model: planModel, args: ["--permission-mode", "plan"] },
-          implClaude: { model: implModel, args: ["--permission-mode", "acceptEdits", "--add-dir", "{{workspaceRoot}}"] },
-          reviewClaude: { model: reviewModel, args: ["--permission-mode", "plan"] }
+          planClaude: roleConfig(planModel, ["--permission-mode", "plan"]),
+          implClaude: roleConfig(implModel, ["--permission-mode", "acceptEdits", "--add-dir", "{{workspaceRoot}}"]),
+          reviewClaude: roleConfig(reviewModel, ["--permission-mode", "plan"])
         }
       }
     },
@@ -361,6 +377,92 @@ test("plugin falls back to global with-claude config and lets project config ove
   }
 });
 
+test("plugin uses defaultModel for all roles and lets per-role model override it", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-defaultmodel-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-defaultmodel-xdg-"));
+  const claudeScript = path.join(projectRoot, "fake-claude-defaultmodel.js");
+
+  await writeFile(
+    claudeScript,
+    [
+      "#!/usr/bin/env node",
+      'const args = process.argv.slice(2);',
+      'const model = args.includes("--model") ? args[args.indexOf("--model") + 1] : "missing-model";',
+      'process.stdout.write(JSON.stringify({ planText: model }));'
+    ].join("\n"),
+    "utf8"
+  );
+
+  await writeWithClaudeConfig(
+    path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc"),
+    withClaudeConfigJson({ command: process.execPath, commonArgs: [claudeScript], defaultModel: "opus" })
+  );
+
+  delete process.env.IMPLEMENTER_COMMAND;
+  delete process.env.IMPLEMENTER_ARGS;
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+  process.env.DATA_DIR = "./data";
+
+  try {
+    let hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {} as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    const createTask = (hooks.tool as PluginToolMap).create_task;
+    const runClaudePlan = (hooks.tool as PluginToolMap).run_claude_plan;
+    const getTaskContext = (hooks.tool as PluginToolMap).get_task_context;
+
+    const created = await createTask!.execute!({
+      title: "Default model task",
+      request: "Use the shared default Claude model",
+      requesterId: "plugin-user"
+    });
+    const taskId = created.match(/- taskId: (task-[a-z0-9-]+)/i)?.[1];
+    assert.ok(taskId);
+
+    await runClaudePlan!.execute!({ taskId, actorId: "planClaude" });
+    const defaultContext = await getTaskContext!.execute!({ taskId });
+    assert.match(defaultContext, /opus/);
+
+    await writeWithClaudeConfig(
+      path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc"),
+      withClaudeConfigJson({ command: process.execPath, commonArgs: [claudeScript], defaultModel: "sonnet", planModel: "haiku" })
+    );
+
+    hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {} as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    const overrideCreateTask = (hooks.tool as PluginToolMap).create_task;
+    const overrideRunClaudePlan = (hooks.tool as PluginToolMap).run_claude_plan;
+    const overrideGetTaskContext = (hooks.tool as PluginToolMap).get_task_context;
+
+    const overrideCreated = await overrideCreateTask!.execute!({
+      title: "Per-role override task",
+      request: "Use role-specific override over default model",
+      requesterId: "plugin-user"
+    });
+    const overrideTaskId = overrideCreated.match(/- taskId: (task-[a-z0-9-]+)/i)?.[1];
+    assert.ok(overrideTaskId);
+
+    await overrideRunClaudePlan!.execute!({ taskId: overrideTaskId, actorId: "planClaude" });
+    const overrideContext = await overrideGetTaskContext!.execute!({ taskId: overrideTaskId });
+    assert.match(overrideContext, /haiku/);
+  } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
 test("plugin preserves global role args and agent prompt fields during partial project overrides", async () => {
   const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-partial-"));
   const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-partial-xdg-"));
@@ -534,6 +636,160 @@ test("session startup syncs bundled prompts and migrates legacy managed config i
     assert.match(pluginPackageJson, /"@little_tale\/opencode-with-claude": "latest"/);
     assert.match(pluginShim, /@little_tale\/opencode-with-claude\/plugin/);
     assert.deepEqual(toastCalls, ["WithClaude Updated"]);
+  } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
+test("session startup preserves customized legacy config while migrating the exact legacy managed default", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-sync-legacy-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-sync-legacy-xdg-"));
+  const configRoot = path.join(xdgConfigHome, "opencode");
+  const managedConfigPath = path.join(configRoot, ".opencode", "opencode-with-claude.jsonc");
+  const customConfigPath = path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc");
+
+  await writeWithClaudeConfig(
+    managedConfigPath,
+    JSON.stringify(
+      {
+        claudeCli: {
+          command: "claude",
+          commonArgs: ["-p", "--output-format", "json"],
+          timeoutMs: 900000,
+          roles: {
+            planClaude: { model: "sonnet", args: ["--permission-mode", "plan"] },
+            implClaude: { model: "sonnet", args: ["--permission-mode", "acceptEdits", "--add-dir", "{{workspaceRoot}}"] },
+            reviewClaude: { model: "sonnet", args: ["--permission-mode", "plan"] }
+          }
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  await writeWithClaudeConfig(
+    customConfigPath,
+    JSON.stringify(
+      {
+        claudeCli: {
+          command: "claude",
+          commonArgs: ["-p", "--output-format", "json"],
+          timeoutMs: 900000,
+          roles: {
+            planClaude: { model: "opus", args: ["--permission-mode", "plan"] },
+            implClaude: { model: "sonnet", args: ["--permission-mode", "acceptEdits", "--add-dir", "{{workspaceRoot}}"] },
+            reviewClaude: { model: "sonnet", args: ["--permission-mode", "plan"] }
+          }
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+  process.env.DATA_DIR = "./data";
+
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: { tui: { showToast: async () => {} } } as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+
+    const migratedManagedConfig = await readFile(managedConfigPath, "utf8");
+    const preservedCustomConfig = await readFile(customConfigPath, "utf8");
+
+    assert.match(migratedManagedConfig, /defaultModel/);
+    assert.match(migratedManagedConfig, /Optional user overrides only/);
+    assert.match(preservedCustomConfig, /"model": "opus"/);
+    assert.doesNotMatch(preservedCustomConfig, /Optional user overrides only/);
+  } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
+test("session startup reloads migrated Claude config before running plan tools", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-sync-reload-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-sync-reload-xdg-"));
+  const configRoot = path.join(xdgConfigHome, "opencode");
+  const managedConfigPath = path.join(configRoot, ".opencode", "opencode-with-claude.jsonc");
+  const claudeScript = path.join(projectRoot, "fake-claude-sync-reload.js");
+
+  await writeFile(
+    claudeScript,
+    [
+      "#!/usr/bin/env node",
+      'const args = process.argv.slice(2);',
+      'const model = args.includes("--model") ? args[args.indexOf("--model") + 1] : "missing-model";',
+      'process.stdout.write(JSON.stringify({ planText: model }));'
+    ].join("\n"),
+    "utf8"
+  );
+
+  await writeWithClaudeConfig(
+    managedConfigPath,
+    JSON.stringify(
+      {
+        claudeCli: {
+          command: "claude",
+          commonArgs: ["-p", "--output-format", "json"],
+          timeoutMs: 900000,
+          roles: {
+            planClaude: { model: "sonnet", args: ["--permission-mode", "plan"] },
+            implClaude: { model: "sonnet", args: ["--permission-mode", "acceptEdits", "--add-dir", "{{workspaceRoot}}"] },
+            reviewClaude: { model: "sonnet", args: ["--permission-mode", "plan"] }
+          }
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  await writeWithClaudeConfig(
+    path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc"),
+    withClaudeConfigJson({ command: process.execPath, commonArgs: [claudeScript], defaultModel: "opus" })
+  );
+
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+  process.env.DATA_DIR = "./data";
+
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: { tui: { showToast: async () => {} } } as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+
+    const createTask = (hooks.tool as PluginToolMap).create_task;
+    const runClaudePlan = (hooks.tool as PluginToolMap).run_claude_plan;
+    const getTaskContext = (hooks.tool as PluginToolMap).get_task_context;
+
+    const created = await createTask!.execute!({
+      title: "Reload migrated config task",
+      request: "Use project defaultModel immediately after legacy migration",
+      requesterId: "plugin-user"
+    });
+    const taskId = created.match(/- taskId: (task-[a-z0-9-]+)/i)?.[1];
+    assert.ok(taskId);
+
+    await runClaudePlan!.execute!({ taskId, actorId: "planClaude" });
+    const context = await getTaskContext!.execute!({ taskId });
+
+    assert.match(context, /opus/);
+    assert.doesNotMatch(context, /sonnet/);
   } finally {
     process.env = { ...originalEnv };
   }

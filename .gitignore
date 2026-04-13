@@ -6,6 +6,7 @@ data/
 .omd/
 .omc/
 .sisyphus/
+Plan/
 state/
 .tmp-provider-*.log
 .tmp-provider-*.jsonl

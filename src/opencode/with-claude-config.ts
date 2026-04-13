@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import type { ClaudeCliConfig } from "../agents/claude-cli.js";
 import { defaultOpenCodeConfigDir } from "./default-config-dir.js";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -17,7 +18,7 @@ export type WithClaudeAgentConfig = {
 
 export type WithClaudeConfig = {
   agent?: Record<string, WithClaudeAgentConfig>;
-  claudeCli?: Record<string, unknown>;
+  claudeCli?: ClaudeCliConfig;
 };
 
 export function parseJsoncObject(content: string): unknown {
