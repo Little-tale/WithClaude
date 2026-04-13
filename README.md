@@ -149,11 +149,41 @@ This is the user-editable Claude role config.
 
 Use it to change:
 
-- role model selection
+- the default Claude model for all workflow roles
+- per-role model overrides when one role should differ
 - Claude CLI arguments
 - timeouts and related runtime options
 
 The plugin loads bundled package defaults first, then applies this global file as an override. If a workspace also has `.opencode/opencode-with-claude.jsonc`, that project-local file overrides the global values for that workspace only. Partial workspace overrides keep the remaining bundled/global settings unless they explicitly replace them.
+
+The simplest way to switch models is to change one value:
+
+```jsonc
+{
+  "claudeCli": {
+    "defaultModel": "opus"
+  }
+}
+```
+
+That applies the same Claude model to `@planClaude`, `@implClaude`, and `@reviewClaude`.
+
+If one role should use a different model, keep the shared default and override only that role:
+
+```jsonc
+{
+  "claudeCli": {
+    "defaultModel": "sonnet",
+    "roles": {
+      "planClaude": {
+        "model": "opus"
+      }
+    }
+  }
+}
+```
+
+In that example, planning uses `opus` while implementation and review still use `sonnet`.
 
 ## Package surfaces
 
