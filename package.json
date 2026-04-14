@@ -3,7 +3,7 @@
   "version": "0.1.4",
   "private": false,
   "license": "MIT",
-  "description": "Claude CLI provider and workflow plugin surfaces for OpenCode.",
+  "description": "Claude CLI and Gemini CLI provider plus workflow plugin surfaces for OpenCode.",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Little-tale/WithClaude.git"

@@ -1,11 +1,11 @@
 # opencode-with-claude
 
-Claude CLI provider and workflow surfaces for OpenCode.
+Claude CLI and Gemini CLI provider plus workflow surfaces for OpenCode.
 
 This package gives you two things:
 
-- a `with-claude/*` provider that runs through the local **Claude CLI**
-- bundled OpenCode subagents and command prompts for `@planClaude`, `@implClaude`, and `@reviewClaude`
+- provider-backed models that run through the local **Claude CLI** and **Gemini CLI**
+- bundled OpenCode subagents and command prompts for `@planClaude`, `@implClaude`, `@designGemini`, `@reviewClaude`, and `@reviewGemini`
 
 ## Quick start
 
@@ -63,7 +63,7 @@ It will:
 - copy bundled reusable command prompts into `~/.config/opencode/.opencode/command/`
 - create or merge `~/.config/opencode/opencode.json`
 
-If `~/.config/opencode/opencode.json` already exists, the installer preserves existing top-level fields and merges the `with-claude` provider and Claude subagents into that global config.
+If `~/.config/opencode/opencode.json` already exists, the installer preserves existing top-level fields and merges the `with-claude` / `with-gemini` providers and workflow subagents into that global config.
 
 The bundled Claude subagent prompts and default role config now load from the installed npm package at runtime, so new package releases can update those defaults without re-copying them into user config.
 
@@ -81,6 +81,7 @@ If a newer package is installed during startup, OpenCode will notify the user. A
 - Node.js 22+
 - OpenCode installed and available in your environment
 - Claude CLI installed and available as `claude`
+- Gemini CLI installed and available as `gemini` if you want Gemini-backed subagents
 
 If Claude CLI is installed somewhere else, update the generated config accordingly.
 
@@ -95,14 +96,17 @@ The package exposes these provider-backed models:
 - `with-claude/haiku`
 - `with-claude/sonnet`
 - `with-claude/opus`
+- `with-gemini/default`
 
-### Claude subagents
+### Workflow subagents
 
 The package installs these OpenCode subagents:
 
 - `@planClaude`
 - `@implClaude`
+- `@designGemini`
 - `@reviewClaude`
+- `@reviewGemini`
 
 Use them from the OpenCode UI / TUI through mention-style invocation.
 
@@ -111,7 +115,9 @@ Use them from the OpenCode UI / TUI through mention-style invocation.
 ```text
 @planClaude
 @implClaude
+@designGemini
 @reviewClaude
+@reviewGemini
 ```
 
 These are **subagents**, not primary agents. That means:
@@ -141,17 +147,19 @@ This is the global OpenCode config.
 It connects:
 
 - the `with-claude` provider
-- the three Claude subagents
+- the `with-gemini` provider
+- the bundled workflow subagents
 
 ### `XDG_CONFIG_HOME/opencode/.opencode/opencode-with-claude.jsonc` or `~/.config/opencode/.opencode/opencode-with-claude.jsonc`
 
-This is the user-editable Claude role config.
+This is the user-editable workflow role config.
 
 Use it to change:
 
 - the default Claude model for all workflow roles
 - per-role model overrides when one role should differ
 - Claude CLI arguments
+- Gemini CLI command / timeout / role overrides
 - timeouts and related runtime options
 
 The plugin loads bundled package defaults first, then applies this global file as an override. If a workspace also has `.opencode/opencode-with-claude.jsonc`, that project-local file overrides the global values for that workspace only. Partial workspace overrides keep the remaining bundled/global settings unless they explicitly replace them.
@@ -185,11 +193,13 @@ If one role should use a different model, keep the shared default and override o
 
 In that example, planning uses `opus` while implementation and review still use `sonnet`.
 
+Gemini-backed subagents use the separate `geminiCli` section and follow the Gemini CLI default model unless you override it explicitly.
+
 ## Package surfaces
 
 This package exposes two runtime surfaces:
 
-- package root: provider factory (`createWithClaude`)
+- package root: provider factories (`createWithClaude`, `createWithGemini`)
 - `./plugin`: OpenCode workflow tools/state surface
 
 ## Development
@@ -231,9 +241,9 @@ Project-local development files such as `src/`, `Plan/`, `data-*`, and local pro
 
 ## Notes
 
-- The package uses **Claude CLI**, not the Claude API.
-- The provider runtime is the main long-term execution path.
-- The bundled commands are designed to delegate into the Claude subagents instead of free-typing in the current primary agent.
+- The package uses local **Claude CLI** and **Gemini CLI**, not hosted API SDKs.
+- The provider runtime is the main execution path for provider-backed models.
+- The bundled commands are designed to delegate into the workflow subagents instead of free-typing in the current primary agent.
 
 ## Uninstall
 
@@ -242,8 +252,10 @@ Remove the installed files from your global OpenCode config:
 - `~/.config/opencode/.opencode/opencode-with-claude.jsonc`
 - `~/.config/opencode/package.json` (or remove just the `@little_tale/opencode-with-claude` dependency)
 - `~/.config/opencode/plugins/with-claude-plugin.mjs`
+- `~/.config/opencode/.opencode/command/designGemini.md`
 - `~/.config/opencode/.opencode/command/implClaude.md`
 - `~/.config/opencode/.opencode/command/planClaude.md`
 - `~/.config/opencode/.opencode/command/reviewClaude.md`
+- `~/.config/opencode/.opencode/command/reviewGemini.md`
 
-Then remove or edit the `with-claude` provider and Claude subagent entries in `~/.config/opencode/opencode.json` manually.
+Then remove or edit the `with-claude` / `with-gemini` provider entries and workflow subagent entries in `~/.config/opencode/opencode.json` manually.

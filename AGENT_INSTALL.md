@@ -16,16 +16,20 @@ npx @little_tale/opencode-with-claude install
 ```
 
 3. Confirm Claude CLI is installed and available as `claude`.
-4. If OpenCode already has an `opencode.json`, keep existing top-level settings and let the installer merge the `with-claude` provider entries.
+4. Confirm Gemini CLI is installed and available as `gemini` if the user wants `@designGemini` or `@reviewGemini`.
+5. If OpenCode already has an `opencode.json`, keep existing top-level settings and let the installer merge the workflow provider entries.
 
 ## Expected result
 
 After installation, the user's OpenCode config should include:
 
 - the `with-claude` provider
+- the `with-gemini` provider
 - `@planClaude`
 - `@implClaude`
+- `@designGemini`
 - `@reviewClaude`
+- `@reviewGemini`
 
 The installer also bootstraps a managed local plugin workspace under the user's OpenCode config so startup hooks can keep bundled prompts and the npm package up to date automatically.
 
