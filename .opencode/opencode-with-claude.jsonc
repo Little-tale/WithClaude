@@ -16,5 +16,14 @@
         "args": ["--permission-mode", "plan"]
       }
     }
+  },
+  "geminiCli": {
+    "command": "gemini",
+    "commonArgs": ["--output-format", "json", "-p"],
+    "timeoutMs": 900000,
+    "roles": {
+      "designGemini": {},
+      "reviewGemini": {}
+    }
   }
 }

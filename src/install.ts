@@ -110,9 +110,29 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
           }
         },
         options: { cliPath: "claude" }
+      },
+      "with-gemini": {
+        npm: PACKAGE_NAME,
+        models: {
+          default: {
+            name: "WithGemini Default",
+            attachment: false,
+            limit: { context: 1000000, output: 16384 },
+            capabilities: { reasoning: true, toolcall: true }
+          }
+        },
+        options: { cliPath: "gemini", name: "with-gemini", skipPermissions: false }
       }
     },
     agent: {
+      designGemini: {
+        description: "Gemini implementation executor for frontend styling and component structure tasks",
+        mode: "subagent",
+        hidden: false,
+        model: "with-gemini/default",
+        prompt: runtimeManagedPrompt("designGemini"),
+        tools: {}
+      },
       implClaude: {
         description: "Claude implementation executor for approved workflow tasks",
         mode: "subagent",
@@ -135,6 +155,14 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
         hidden: false,
         model: "with-claude/sonnet",
         prompt: runtimeManagedPrompt("reviewClaude"),
+        tools: {}
+      },
+      reviewGemini: {
+        description: "Gemini review assistant for implementation verification",
+        mode: "subagent",
+        hidden: false,
+        model: "with-gemini/default",
+        prompt: runtimeManagedPrompt("reviewGemini"),
         tools: {}
       }
     }
@@ -202,9 +230,11 @@ export async function installOpenCodeWithClaude(options: InstallOptions): Promis
   const skipped: string[] = [];
 
   for (const relativePath of [
+    ".opencode/command/designGemini.md",
     ".opencode/command/implClaude.md",
     ".opencode/command/planClaude.md",
-    ".opencode/command/reviewClaude.md"
+    ".opencode/command/reviewClaude.md",
+    ".opencode/command/reviewGemini.md"
   ]) {
     const outcome = await copyBundledFile(options.configDir, relativePath, options.force);
     (outcome === "written" ? copied : skipped).push(relativePath);
@@ -222,7 +252,7 @@ export async function installOpenCodeWithClaude(options: InstallOptions): Promis
     `${overrideConfig.outcome === "written" ? "Wrote" : "Kept existing"}: ${path.relative(options.configDir, overrideConfig.path) || ".opencode/opencode-with-claude.jsonc"}`,
     `${bootstrap.dependencyChanged ? "Updated" : "Kept existing"}: package.json plugin dependency`,
     `${bootstrap.shimChanged ? "Updated" : "Kept existing"}: plugins/with-claude-plugin.mjs`,
-    "Next: open OpenCode anywhere and use @planClaude / @implClaude / @reviewClaude."
+    "Next: open OpenCode anywhere and use @planClaude / @implClaude / @designGemini / @reviewClaude / @reviewGemini."
   ].join("\n");
 }
 

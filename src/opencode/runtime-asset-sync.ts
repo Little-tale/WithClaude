@@ -93,12 +93,16 @@ export function createRuntimeAssetSyncHook(ctx: PluginInput) {
       const bootstrap = ensurePluginRuntimeBootstrap(configDir);
       const results = await Promise.all([
         migrateLegacyOverrideFile(configDir),
+        syncBundledFile(configDir, ".opencode/agents/designGemini.md"),
         syncBundledFile(configDir, ".opencode/agents/implClaude.md"),
         syncBundledFile(configDir, ".opencode/agents/planClaude.md"),
         syncBundledFile(configDir, ".opencode/agents/reviewClaude.md"),
+        syncBundledFile(configDir, ".opencode/agents/reviewGemini.md"),
+        syncBundledFile(configDir, ".opencode/command/designGemini.md"),
         syncBundledFile(configDir, ".opencode/command/implClaude.md"),
         syncBundledFile(configDir, ".opencode/command/planClaude.md"),
-        syncBundledFile(configDir, ".opencode/command/reviewClaude.md")
+        syncBundledFile(configDir, ".opencode/command/reviewClaude.md"),
+        syncBundledFile(configDir, ".opencode/command/reviewGemini.md")
       ]);
 
       if (!results.some(Boolean) && !bootstrap.dependencyChanged && !bootstrap.shimChanged) {
@@ -106,12 +110,12 @@ export function createRuntimeAssetSyncHook(ctx: PluginInput) {
       }
 
       await ctx.client.tui.showToast({
-        body: {
-          title: "WithClaude Updated",
-          message: "Bundled prompts and default Claude settings were synced from the installed package.",
-          variant: "success",
-          duration: 5000
-        }
+          body: {
+            title: "WithClaude Updated",
+            message: "Bundled prompts and default workflow settings were synced from the installed package.",
+            variant: "success",
+            duration: 5000
+          }
       }).catch(() => {});
     }
   };
