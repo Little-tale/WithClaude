@@ -1,12 +1,16 @@
-import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
 
 import { tool, type Plugin } from "@opencode-ai/plugin";
 import { runClaudeCliJson, type ClaudeCliConfig } from "../agents/claude-cli.js";
+import {
+  runGeminiCliJson,
+  runGeminiDesignWithRollback,
+  validateGeminiDesignSummary,
+  validateGeminiReviewResult,
+  type GeminiCliConfig
+} from "../agents/gemini-cli.js";
 
 import { loadEnv } from "../config/env.js";
-import type { OrchestrationHost } from "../orchestrator/host.js";
 import { createOrchestrationHost } from "../orchestrator/host-factory.js";
 import type { WorkflowTask } from "../types/task.js";
 import { createAutoUpdateHook } from "./auto-update-hook.js";
@@ -15,7 +19,6 @@ import { createRuntimeAssetSyncHook } from "./runtime-asset-sync.js";
 import { loadWithClaudeConfig } from "./with-claude-config.js";
 
 const schema = tool.schema;
-const packageRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..", "..");
 
 function formatTaskList(tasks: WorkflowTask[]): string {
   if (tasks.length === 0) {
@@ -142,6 +145,49 @@ function buildClaudeReviewPrompt(task: WorkflowTask): string {
   ].join("\n");
 }
 
+function buildGeminiDesignPrompt(task: WorkflowTask): string {
+  return [
+    "You are designGemini.",
+    "Return only JSON matching the provided schema.",
+    "Implement only the frontend styling and component-structure parts of the approved plan in the current workspace.",
+    "Do not perform unrelated business-logic work.",
+    "If the approved plan includes non-UI work, summarize only the UI-related implementation you completed.",
+    "On success, return JSON with a single `summary` field.",
+    "On failure, do not fabricate success output.",
+    "",
+    `Task ID: ${task.taskId}`,
+    `Workspace: ${task.workspaceRoot ?? "(none)"}`,
+    `Revision: ${task.planRevision}`,
+    "",
+    "## Request",
+    task.request,
+    "",
+    "## Approved Plan",
+    task.planText
+  ].join("\n");
+}
+
+function buildGeminiReviewPrompt(task: WorkflowTask): string {
+  return [
+    "You are reviewGemini.",
+    "Return only JSON matching the provided schema.",
+    "Review the implementation against the approved plan.",
+    "Return a strict verdict using `approved` or `rejected`.",
+    "",
+    `Task ID: ${task.taskId}`,
+    `Revision: ${task.planRevision}`,
+    "",
+    "## Request",
+    task.request,
+    "",
+    "## Approved Plan",
+    task.planText,
+    "",
+    "## Implementation Summary",
+    task.implementationSummary || "(empty)"
+  ].join("\n");
+}
+
 function resolvePluginEnv(directory: string, worktree: string) {
   const env = loadEnv();
   const projectRoot = worktree || directory;
@@ -156,11 +202,17 @@ function resolvePluginEnv(directory: string, worktree: string) {
 const AgentWorkflowPlugin: Plugin = async (input) => {
   const env = resolvePluginEnv(input.directory, input.worktree);
   const host = createOrchestrationHost(env);
-  let withClaudeConfig = await loadWithClaudeConfig(env.projectRoot) as { agent?: Record<string, { description?: string; mode?: "subagent" | "primary" | "all"; hidden?: boolean; model?: string; prompt?: string; tools?: Record<string, boolean> }>; claudeCli?: ClaudeCliConfig };
+  let withClaudeConfig = await loadWithClaudeConfig(env.projectRoot) as {
+    agent?: Record<string, { description?: string; mode?: "subagent" | "primary" | "all"; hidden?: boolean; model?: string; prompt?: string; tools?: Record<string, boolean> }>;
+    claudeCli?: ClaudeCliConfig;
+    geminiCli?: GeminiCliConfig;
+  };
   const subagents = await Promise.all([
+    loadBundledSubagent("designGemini"),
     loadBundledSubagent("implClaude"),
     loadBundledSubagent("planClaude"),
-    loadBundledSubagent("reviewClaude")
+    loadBundledSubagent("reviewClaude"),
+    loadBundledSubagent("reviewGemini")
   ]);
   const assetSyncHook = createRuntimeAssetSyncHook(input);
   const autoUpdateHook = createAutoUpdateHook(input);
@@ -292,7 +344,7 @@ const AgentWorkflowPlugin: Plugin = async (input) => {
         },
         async execute({ taskId, approverId }) {
           const task = await host.approveOnly(taskId, approverId);
-          return `${formatMutationResult("Approved Task", task)}\n\nUse run_claude_implementation next when you are ready to execute the approved plan.`;
+          return `${formatMutationResult("Approved Task", task)}\n\nUse @implClaude or @designGemini next when you are ready to execute the approved plan.`;
         }
       }),
       reject_plan: tool({
@@ -376,6 +428,52 @@ const AgentWorkflowPlugin: Plugin = async (input) => {
           });
           const saved = await host.recordReview(taskId, actorId, result.decision, result.summary);
           return formatMutationResult("Claude Reviewed Task", saved);
+        }
+      }),
+      run_gemini_design: tool({
+        description: "Use Gemini CLI to implement frontend styling and component structure for an approved plan and save the implementation summary.",
+        args: {
+          taskId: schema.string(),
+          actorId: schema.string()
+        },
+        async execute({ taskId, actorId }) {
+          const task = await host.getTask(taskId);
+          if (!task) {
+            return `Task not found: ${taskId}`;
+          }
+          const result = await runGeminiDesignWithRollback<{ summary: string }>({
+            config: withClaudeConfig.geminiCli ?? {},
+            prompt: buildGeminiDesignPrompt(task),
+            cwd: task.workspaceRoot ?? env.projectRoot,
+            templates: {
+              workspaceRoot: task.workspaceRoot ?? env.projectRoot
+            },
+            validate: validateGeminiDesignSummary
+          });
+          const saved = await host.saveImplementationSummary(taskId, actorId, result.summary);
+          return formatMutationResult("Gemini Designed Task", saved);
+        }
+      }),
+      run_gemini_review: tool({
+        description: "Use Gemini CLI to review an implementation and record the review result.",
+        args: {
+          taskId: schema.string(),
+          actorId: schema.string()
+        },
+        async execute({ taskId, actorId }) {
+          const task = await host.getTask(taskId);
+          if (!task) {
+            return `Task not found: ${taskId}`;
+          }
+          const result = await runGeminiCliJson<{ decision: "approved" | "rejected"; summary: string }>({
+            config: withClaudeConfig.geminiCli ?? {},
+            role: "reviewGemini",
+            prompt: buildGeminiReviewPrompt(task),
+            cwd: task.workspaceRoot ?? env.projectRoot,
+            validate: validateGeminiReviewResult
+          });
+          const saved = await host.recordReview(taskId, actorId, result.decision, result.summary);
+          return formatMutationResult("Gemini Reviewed Task", saved);
         }
       })
     },

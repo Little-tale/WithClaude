@@ -3,6 +3,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { ClaudeCliConfig } from "../agents/claude-cli.js";
+import type { GeminiCliConfig } from "../agents/gemini-cli.js";
 import { defaultOpenCodeConfigDir } from "./default-config-dir.js";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
@@ -19,6 +20,7 @@ export type WithClaudeAgentConfig = {
 export type WithClaudeConfig = {
   agent?: Record<string, WithClaudeAgentConfig>;
   claudeCli?: ClaudeCliConfig;
+  geminiCli?: GeminiCliConfig;
 };
 
 export function parseJsoncObject(content: string): unknown {
@@ -50,30 +52,39 @@ export function mergeWithClaudeConfig(base: WithClaudeConfig, override: WithClau
       )
     : undefined;
 
-  const baseCli = base.claudeCli as { roles?: Record<string, Record<string, unknown>> } | undefined;
-  const overrideCli = override.claudeCli as { roles?: Record<string, Record<string, unknown>> } | undefined;
-  const mergedClaudeCli = baseCli || overrideCli
-    ? {
-        ...(baseCli ?? {}),
-        ...(overrideCli ?? {}),
-        roles: Object.fromEntries(
-          Array.from(new Set([...Object.keys(baseCli?.roles ?? {}), ...Object.keys(overrideCli?.roles ?? {})])).map((roleName) => [
-            roleName,
-            {
-              ...(baseCli?.roles?.[roleName] ?? {}),
-              ...(overrideCli?.roles?.[roleName] ?? {})
-            }
-          ])
-        )
-      }
-    : undefined;
+  const mergedClaudeCli = mergeCliSection(base.claudeCli, override.claudeCli);
+  const mergedGeminiCli = mergeCliSection(base.geminiCli, override.geminiCli);
 
   return {
     ...(base ?? {}),
     ...(override ?? {}),
     ...(mergedAgent ? { agent: mergedAgent } : {}),
-    ...(mergedClaudeCli ? { claudeCli: mergedClaudeCli } : {})
+    ...(mergedClaudeCli ? { claudeCli: mergedClaudeCli } : {}),
+    ...(mergedGeminiCli ? { geminiCli: mergedGeminiCli } : {})
   };
+}
+
+function mergeCliSection<T extends { roles?: Record<string, Record<string, unknown>> }>(
+  base: T | undefined,
+  override: T | undefined
+): T | undefined {
+  if (!base && !override) {
+    return undefined;
+  }
+
+  return {
+    ...(base ?? {}),
+    ...(override ?? {}),
+    roles: Object.fromEntries(
+      Array.from(new Set([...Object.keys(base?.roles ?? {}), ...Object.keys(override?.roles ?? {})])).map((roleName) => [
+        roleName,
+        {
+          ...(base?.roles?.[roleName] ?? {}),
+          ...(override?.roles?.[roleName] ?? {})
+        }
+      ])
+    )
+  } as T;
 }
 
 export async function loadWithClaudeConfig(projectRoot: string): Promise<WithClaudeConfig> {
