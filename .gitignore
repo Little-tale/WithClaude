@@ -12,3 +12,6 @@ state/
 .tmp-provider-*.jsonl
 *.tgz
 opencode-with-claude.snippet.jsonc
+
+.daegeun
+.daegeun/**
