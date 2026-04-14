@@ -29,6 +29,10 @@ export class WithClaudeLanguageModel implements LanguageModelV2 {
     return this.config.provider;
   }
 
+  private get cliModelId(): string | undefined {
+    return this.modelId === "default" ? undefined : this.modelId;
+  }
+
   async doGenerate(options: Parameters<LanguageModelV2["doGenerate"]>[0]): Promise<Awaited<ReturnType<LanguageModelV2["doGenerate"]>>> {
     await this.debugPrompt("generate", options.prompt);
     if (this.requestScope(options) === "no-tools" && this.shouldSynthesizeTitle(options.prompt)) {
@@ -45,7 +49,7 @@ export class WithClaudeLanguageModel implements LanguageModelV2 {
         },
         warnings: [],
         providerMetadata: {
-          "with-claude": { synthetic: true, path: "title" }
+          [this.config.provider]: { synthetic: true, path: "title" }
         }
       };
     }
@@ -59,7 +63,7 @@ export class WithClaudeLanguageModel implements LanguageModelV2 {
       sessionKey: key,
       skipPermissions: this.config.skipPermissions !== false,
       includeSessionId: false,
-      model: this.modelId
+      model: this.cliModelId
     });
 
     const { spawn } = await import("node:child_process");
@@ -170,7 +174,7 @@ export class WithClaudeLanguageModel implements LanguageModelV2 {
       },
       warnings,
       providerMetadata: {
-        "with-claude": { sessionId: sessionId ?? null }
+        [this.config.provider]: { sessionId: sessionId ?? null }
       }
     };
   }
@@ -182,6 +186,7 @@ export class WithClaudeLanguageModel implements LanguageModelV2 {
       const textId = randomUUID();
       const responseId = randomUUID();
       const modelId = this.modelId;
+      const providerKey = this.config.provider;
       return {
         stream: new ReadableStream<LanguageModelV2StreamPart>({
           start(controller) {
@@ -200,7 +205,7 @@ export class WithClaudeLanguageModel implements LanguageModelV2 {
                 totalTokens: 0
               },
               providerMetadata: {
-                "with-claude": { synthetic: true, path: "title", sessionId: responseId }
+                [providerKey]: { synthetic: true, path: "title", sessionId: responseId }
               }
             } as any);
             controller.close();
@@ -220,7 +225,7 @@ export class WithClaudeLanguageModel implements LanguageModelV2 {
       sessionKey: key,
       skipPermissions: this.config.skipPermissions !== false,
       includeSessionId: false,
-      model: this.modelId
+      model: this.cliModelId
     });
 
     const stream = new ReadableStream<LanguageModelV2StreamPart>({
@@ -274,7 +279,7 @@ export class WithClaudeLanguageModel implements LanguageModelV2 {
               totalTokens: inputTokens + outputTokens
             },
             providerMetadata: {
-              "with-claude": { sessionId: currentSessionId ?? null }
+              [this.config.provider]: { sessionId: currentSessionId ?? null }
             }
           };
           void this.debugStreamEvent({
