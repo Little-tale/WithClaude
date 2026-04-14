@@ -14,14 +14,19 @@ test("installer creates baseline OpenCode config and bundled assets in a new pro
   const opencodeConfig = await readFile(path.join(configDir, "opencode.json"), "utf8");
   const roleConfig = await readFile(path.join(configDir, ".opencode", "opencode-with-claude.jsonc"), "utf8");
   const commandPrompt = await readFile(path.join(configDir, ".opencode", "command", "planClaude.md"), "utf8");
+  const designCommandPrompt = await readFile(path.join(configDir, ".opencode", "command", "designGemini.md"), "utf8");
   const pluginPackageJson = await readFile(path.join(configDir, "package.json"), "utf8");
   const pluginShim = await readFile(path.join(configDir, "plugins", "with-claude-plugin.mjs"), "utf8");
 
   assert.match(output, /Installed @little_tale\/opencode-with-claude into global OpenCode config/);
   assert.match(opencodeConfig, /"npm": "@little_tale\/opencode-with-claude"/);
+  assert.match(opencodeConfig, /"with-gemini"/);
+  assert.match(opencodeConfig, /Runtime-managed designGemini prompt/);
   assert.match(opencodeConfig, /Runtime-managed planClaude prompt/);
   assert.match(roleConfig, /Optional user overrides only/);
+  assert.match(roleConfig, /"geminiCli"/);
   assert.match(commandPrompt, /@planClaude/);
+  assert.match(designCommandPrompt, /@designGemini/);
   assert.match(pluginPackageJson, /"@little_tale\/opencode-with-claude": "latest"/);
   assert.match(pluginShim, /@little_tale\/opencode-with-claude\/plugin/);
 });

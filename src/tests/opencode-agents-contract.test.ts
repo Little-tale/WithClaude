@@ -3,9 +3,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
 
-const agentFiles = ["implClaude.md", "planClaude.md", "reviewClaude.md"];
+const agentFiles = ["designGemini.md", "implClaude.md", "planClaude.md", "reviewClaude.md", "reviewGemini.md"];
 
-test("OpenCode agent manifests exist for @implClaude, @planClaude, and @reviewClaude", async () => {
+test("OpenCode agent manifests exist for the bundled Claude and Gemini workflow agents", async () => {
   for (const file of agentFiles) {
     const pluralPath = path.join(process.cwd(), ".opencode", "agents", file);
     const pluralContent = await readFile(pluralPath, "utf8");
@@ -18,8 +18,10 @@ test("OpenCode agent manifests exist for @implClaude, @planClaude, and @reviewCl
 
 test("agent manifests encode distinct role boundaries and workflow expectations", async () => {
   const planAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "planClaude.md"), "utf8");
+  const designAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "designGemini.md"), "utf8");
   const implAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "implClaude.md"), "utf8");
   const reviewAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "reviewClaude.md"), "utf8");
+  const reviewGeminiAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "reviewGemini.md"), "utf8");
 
   assert.match(planAgent, /## Selection rules/);
   assert.match(planAgent, /create_task/);
@@ -30,6 +32,10 @@ test("agent manifests encode distinct role boundaries and workflow expectations"
   assert.match(planAgent, /Do not wait for the user to mention `\.md`, markdown, or saving before persisting the plan/);
   assert.match(planAgent, /Do not implement code/);
 
+  assert.match(designAgent, /## Preconditions/);
+  assert.match(designAgent, /frontend styling and component structure/);
+  assert.match(designAgent, /run_gemini_design/);
+
   assert.match(implAgent, /## Preconditions/);
   assert.match(implAgent, /Only continue if the task is in an implementation-ready state/);
   assert.match(implAgent, /run_claude_implementation/);
@@ -39,12 +45,21 @@ test("agent manifests encode distinct role boundaries and workflow expectations"
   assert.match(reviewAgent, /## Preconditions/);
   assert.match(reviewAgent, /Only continue if implementation has actually been recorded/);
   assert.match(reviewAgent, /run_claude_review/);
+
+  assert.match(reviewGeminiAgent, /## Preconditions/);
+  assert.match(reviewGeminiAgent, /Only continue if implementation has actually been recorded/);
+  assert.match(reviewGeminiAgent, /run_gemini_review/);
 });
 
-test("command prompts delegate to the matching Claude subagents", async () => {
+test("command prompts delegate to the matching Claude and Gemini subagents", async () => {
+  const designCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "designGemini.md"), "utf8");
   const planCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "planClaude.md"), "utf8");
   const implCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "implClaude.md"), "utf8");
   const reviewCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "reviewClaude.md"), "utf8");
+  const reviewGeminiCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "reviewGemini.md"), "utf8");
+
+  assert.match(designCommand, /@designGemini/);
+  assert.match(designCommand, /Do not implement directly/i);
 
   assert.match(planCommand, /@planClaude/);
   assert.match(planCommand, /Do not write the plan yourself/i);
@@ -58,4 +73,7 @@ test("command prompts delegate to the matching Claude subagents", async () => {
 
   assert.match(reviewCommand, /@reviewClaude/);
   assert.match(reviewCommand, /Do not review directly/i);
+
+  assert.match(reviewGeminiCommand, /@reviewGemini/);
+  assert.match(reviewGeminiCommand, /Do not review directly/i);
 });
