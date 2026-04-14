@@ -37,14 +37,32 @@ function withClaudeConfigJson(overrides: {
   implModel?: string | null;
   reviewModel?: string | null;
   agentPlanModel?: string;
+  geminiCommand?: string;
+  geminiCommonArgs?: string[];
+  geminiDefaultModel?: string | null;
+  designModel?: string | null;
+  reviewGeminiModel?: string | null;
+  agentDesignModel?: string;
+  agentReviewGeminiModel?: string;
 } = {}): string {
   const {
     command = "claude",
     commonArgs = ["-p", "--output-format", "json"],
-    agentPlanModel
+    agentPlanModel,
+    geminiCommand = "gemini",
+    geminiCommonArgs = ["--output-format", "json", "-p"],
+    agentDesignModel,
+    agentReviewGeminiModel
   } = overrides;
 
   const readModelOverride = (key: "defaultModel" | "planModel" | "implModel" | "reviewModel", fallback?: string): string | undefined => {
+    if (!(key in overrides)) {
+      return fallback;
+    }
+    return overrides[key] ?? undefined;
+  };
+
+  const readGeminiModelOverride = (key: "geminiDefaultModel" | "designModel" | "reviewGeminiModel", fallback?: string): string | undefined => {
     if (!(key in overrides)) {
       return fallback;
     }
@@ -55,15 +73,24 @@ function withClaudeConfigJson(overrides: {
   const planModel = readModelOverride("planModel", defaultModel ? undefined : "sonnet");
   const implModel = readModelOverride("implModel", defaultModel ? undefined : "sonnet");
   const reviewModel = readModelOverride("reviewModel", defaultModel ? undefined : "sonnet");
+  const geminiDefaultModel = readGeminiModelOverride("geminiDefaultModel");
+  const designModel = readGeminiModelOverride("designModel", geminiDefaultModel ? undefined : undefined);
+  const reviewGeminiModel = readGeminiModelOverride("reviewGeminiModel", geminiDefaultModel ? undefined : undefined);
 
   const roleConfig = (model: string | undefined, args: string[]) => ({
     ...(model ? { model } : {}),
     args
   });
 
+  const agentOverrides = {
+    ...(agentPlanModel ? { planClaude: { model: agentPlanModel } } : {}),
+    ...(agentDesignModel ? { designGemini: { model: agentDesignModel } } : {}),
+    ...(agentReviewGeminiModel ? { reviewGemini: { model: agentReviewGeminiModel } } : {})
+  };
+
   return `${JSON.stringify(
     {
-      ...(agentPlanModel ? { agent: { planClaude: { model: agentPlanModel } } } : {}),
+      ...(Object.keys(agentOverrides).length > 0 ? { agent: agentOverrides } : {}),
       claudeCli: {
         command,
         commonArgs,
@@ -72,6 +99,21 @@ function withClaudeConfigJson(overrides: {
           planClaude: roleConfig(planModel, ["--permission-mode", "plan"]),
           implClaude: roleConfig(implModel, ["--permission-mode", "acceptEdits", "--add-dir", "{{workspaceRoot}}"]),
           reviewClaude: roleConfig(reviewModel, ["--permission-mode", "plan"])
+        }
+      },
+      geminiCli: {
+        command: geminiCommand,
+        commonArgs: geminiCommonArgs,
+        ...(geminiDefaultModel ? { defaultModel: geminiDefaultModel } : {}),
+        roles: {
+          designGemini: {
+            ...(designModel ? { model: designModel } : {}),
+            args: []
+          },
+          reviewGemini: {
+            ...(reviewGeminiModel ? { model: reviewGeminiModel } : {}),
+            args: []
+          }
         }
       }
     },
@@ -113,13 +155,17 @@ test("plugin entry exports a default OpenCode plugin with orchestration tools", 
       "run_claude_implementation",
       "run_claude_plan",
       "run_claude_review",
+      "run_gemini_design",
+      "run_gemini_review",
       "save_implementation_summary",
       "save_plan_revision"
     ]);
     assert.equal(typeof hooks.config, "function");
     const config = {} as { agent?: Record<string, { mode?: string; description?: string; prompt?: string; model?: string; tools?: Record<string, boolean> }> };
     await hooks.config?.(config as never);
-    assert.deepEqual(Object.keys(config.agent ?? {}).sort(), ["implClaude", "planClaude", "reviewClaude"]);
+    assert.deepEqual(Object.keys(config.agent ?? {}).sort(), ["designGemini", "implClaude", "planClaude", "reviewClaude", "reviewGemini"]);
+    assert.equal(config.agent?.designGemini?.mode, "subagent");
+    assert.match(config.agent?.designGemini?.description ?? "", /frontend styling and component structure/);
     assert.equal(config.agent?.implClaude?.mode, "subagent");
     assert.match(config.agent?.implClaude?.description ?? "", /implementation executor/);
     assert.match(config.agent?.planClaude?.prompt ?? "", /planning assistant/);
@@ -128,6 +174,12 @@ test("plugin entry exports a default OpenCode plugin with orchestration tools", 
       "get_task_context",
       "list_tasks",
       "run_claude_implementation"
+    ]);
+    assert.deepEqual(Object.keys(config.agent?.designGemini?.tools ?? {}).sort(), [
+      "get_approved_plan",
+      "get_task_context",
+      "list_tasks",
+      "run_gemini_design"
     ]);
     assert.equal(typeof (hooks as { [key: string]: unknown })["session.idle"], "function");
   } finally {
@@ -210,7 +262,142 @@ test("plugin tools return structured workflow-oriented text instead of raw json 
       approverId: "planClaude"
     });
     assert.match(approved, /^# Approved Task/m);
-    assert.match(approved, /Use run_claude_implementation next/);
+    assert.match(approved, /Use @implClaude or @designGemini next/);
+  } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
+test("run_gemini_design and run_gemini_review persist implementation and review summaries", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-gemini-"));
+  const geminiScript = path.join(projectRoot, "fake-gemini.js");
+  await writeFile(
+    geminiScript,
+    [
+      "#!/usr/bin/env node",
+      'const prompt = process.argv.at(-1) ?? "";',
+      'if (prompt.includes("reviewGemini")) {',
+      '  process.stdout.write(JSON.stringify({ response: JSON.stringify({ decision: "approved", summary: "Gemini review ok" }) }));',
+      '} else {',
+      '  process.stdout.write(JSON.stringify({ response: JSON.stringify({ summary: "Gemini design ok" }) }));',
+      '}'
+    ].join("\n"),
+    "utf8"
+  );
+  await writeWithClaudeConfig(
+    path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc"),
+    withClaudeConfigJson({ geminiCommand: process.execPath, geminiCommonArgs: [geminiScript, "--output-format", "json", "-p"] })
+  );
+  process.env.PLANNER_TRANSPORT = "command";
+  process.env.PLANNER_COMMAND = process.execPath;
+  process.env.PLANNER_ARGS = JSON.stringify(["-e", 'process.stdout.write(JSON.stringify({ planText: "# Plan\\n\\n- do ui" }))']);
+  process.env.DATA_DIR = "./data";
+
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {} as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    const createTask = (hooks.tool as PluginToolMap).create_task;
+    const savePlanRevision = (hooks.tool as PluginToolMap).save_plan_revision;
+    const approveTask = (hooks.tool as PluginToolMap).approve_task;
+    const runGeminiDesign = (hooks.tool as PluginToolMap).run_gemini_design;
+    const runGeminiReview = (hooks.tool as PluginToolMap).run_gemini_review;
+    const getTaskContext = (hooks.tool as PluginToolMap).get_task_context;
+
+    const created = await createTask!.execute!({
+      title: "Gemini task",
+      request: "Implement the frontend styling and review it",
+      requesterId: "plugin-user"
+    });
+    const taskId = created.match(/- taskId: (task-[a-z0-9-]+)/i)?.[1];
+    assert.ok(taskId);
+
+    await savePlanRevision!.execute!({
+      taskId,
+      actorId: "planClaude",
+      planText: "# Plan\n\n- update the frontend styling"
+    });
+    await approveTask!.execute!({ taskId, approverId: "planClaude" });
+
+    const designResult = await runGeminiDesign!.execute!({ taskId, actorId: "designGemini" });
+    assert.match(designResult, /^# Gemini Designed Task/m);
+
+    const reviewedResult = await runGeminiReview!.execute!({ taskId, actorId: "reviewGemini" });
+    assert.match(reviewedResult, /^# Gemini Reviewed Task/m);
+
+    const context = await getTaskContext!.execute!({ taskId });
+    assert.match(context, /Gemini design ok/);
+    assert.match(context, /Gemini review ok/);
+  } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
+test("run_gemini_design rolls back files created during a failed run", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-gemini-rollback-"));
+  const geminiScript = path.join(projectRoot, "fake-gemini-rollback.js");
+  const createdFile = path.join(projectRoot, "design-output.txt");
+  await writeFile(
+    geminiScript,
+    [
+      "#!/usr/bin/env node",
+      `const fs = require(${JSON.stringify("node:fs")});`,
+      `fs.writeFileSync(${JSON.stringify(createdFile)}, "temporary design output\n");`,
+      'process.stderr.write("auth failed");',
+      "process.exit(1);"
+    ].join("\n"),
+    "utf8"
+  );
+  await writeWithClaudeConfig(
+    path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc"),
+    withClaudeConfigJson({ geminiCommand: process.execPath, geminiCommonArgs: [geminiScript, "--output-format", "json", "-p"] })
+  );
+  process.env.PLANNER_TRANSPORT = "command";
+  process.env.PLANNER_COMMAND = process.execPath;
+  process.env.PLANNER_ARGS = JSON.stringify(["-e", 'process.stdout.write(JSON.stringify({ planText: "# Plan\\n\\n- do ui" }))']);
+  process.env.DATA_DIR = "./data";
+
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {} as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    const createTask = (hooks.tool as PluginToolMap).create_task;
+    const savePlanRevision = (hooks.tool as PluginToolMap).save_plan_revision;
+    const approveTask = (hooks.tool as PluginToolMap).approve_task;
+    const runGeminiDesign = (hooks.tool as PluginToolMap).run_gemini_design;
+
+    const created = await createTask!.execute!({
+      title: "Gemini rollback task",
+      request: "Fail while editing the frontend styling",
+      requesterId: "plugin-user"
+    });
+    const taskId = created.match(/- taskId: (task-[a-z0-9-]+)/i)?.[1];
+    assert.ok(taskId);
+
+    await savePlanRevision!.execute!({
+      taskId,
+      actorId: "planClaude",
+      planText: "# Plan\n\n- make a styling change"
+    });
+    await approveTask!.execute!({ taskId, approverId: "planClaude" });
+
+    await assert.rejects(
+      () => runGeminiDesign!.execute!({ taskId, actorId: "designGemini" }),
+      /Rollback: reverted changes made during this designGemini run\.|Next action:/
+    );
+    await assert.rejects(() => readFile(createdFile, "utf8"));
   } finally {
     process.env = { ...originalEnv };
   }
@@ -583,6 +770,8 @@ test("session startup syncs bundled prompts and migrates legacy managed config i
   const legacyConfigPath = path.join(configRoot, ".opencode", "opencode-with-claude.jsonc");
   const staleAgentPath = path.join(configRoot, ".opencode", "agents", "planClaude.md");
   const staleCommandPath = path.join(configRoot, ".opencode", "command", "planClaude.md");
+  const staleGeminiAgentPath = path.join(configRoot, ".opencode", "agents", "designGemini.md");
+  const staleGeminiCommandPath = path.join(configRoot, ".opencode", "command", "reviewGemini.md");
   const pluginPackageJsonPath = path.join(configRoot, "package.json");
   const pluginShimPath = path.join(configRoot, "plugins", "with-claude-plugin.mjs");
 
@@ -590,6 +779,8 @@ test("session startup syncs bundled prompts and migrates legacy managed config i
   await writeWithClaudeConfig(legacyConfigPath, bundledConfig);
   await writeWithClaudeConfig(staleAgentPath, "stale-agent\n");
   await writeWithClaudeConfig(staleCommandPath, "stale-command\n");
+  await writeWithClaudeConfig(staleGeminiAgentPath, "stale-gemini-agent\n");
+  await writeWithClaudeConfig(staleGeminiCommandPath, "stale-gemini-command\n");
 
   process.env.XDG_CONFIG_HOME = xdgConfigHome;
   process.env.DATA_DIR = "./data";
@@ -616,23 +807,35 @@ test("session startup syncs bundled prompts and migrates legacy managed config i
     await waitFor(async () => {
       const syncedAgent = await readFile(staleAgentPath, "utf8");
       const syncedCommand = await readFile(staleCommandPath, "utf8");
+      const syncedGeminiAgent = await readFile(staleGeminiAgentPath, "utf8");
+      const syncedGeminiCommand = await readFile(staleGeminiCommandPath, "utf8");
       const bundledAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "planClaude.md"), "utf8");
       const bundledCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "planClaude.md"), "utf8");
+      const bundledGeminiAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "designGemini.md"), "utf8");
+      const bundledGeminiCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "reviewGemini.md"), "utf8");
       assert.equal(syncedAgent, bundledAgent);
       assert.equal(syncedCommand, bundledCommand);
+      assert.equal(syncedGeminiAgent, bundledGeminiAgent);
+      assert.equal(syncedGeminiCommand, bundledGeminiCommand);
     });
 
     const migratedConfig = await readFile(legacyConfigPath, "utf8");
     const syncedAgent = await readFile(staleAgentPath, "utf8");
     const syncedCommand = await readFile(staleCommandPath, "utf8");
+    const syncedGeminiAgent = await readFile(staleGeminiAgentPath, "utf8");
+    const syncedGeminiCommand = await readFile(staleGeminiCommandPath, "utf8");
     const pluginPackageJson = await readFile(pluginPackageJsonPath, "utf8");
     const pluginShim = await readFile(pluginShimPath, "utf8");
     const bundledAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "planClaude.md"), "utf8");
     const bundledCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "planClaude.md"), "utf8");
+    const bundledGeminiAgent = await readFile(path.join(process.cwd(), ".opencode", "agents", "designGemini.md"), "utf8");
+    const bundledGeminiCommand = await readFile(path.join(process.cwd(), ".opencode", "command", "reviewGemini.md"), "utf8");
 
     assert.match(migratedConfig, /Optional user overrides only/);
     assert.equal(syncedAgent, bundledAgent);
     assert.equal(syncedCommand, bundledCommand);
+    assert.equal(syncedGeminiAgent, bundledGeminiAgent);
+    assert.equal(syncedGeminiCommand, bundledGeminiCommand);
     assert.match(pluginPackageJson, /"@little_tale\/opencode-with-claude": "latest"/);
     assert.match(pluginShim, /@little_tale\/opencode-with-claude\/plugin/);
     assert.deepEqual(toastCalls, ["WithClaude Updated"]);
