@@ -54,3 +54,32 @@ export function getClaudeUserMessage(prompt: Prompt): string {
     }
   });
 }
+
+export function getGeminiPromptText(prompt: Prompt): string {
+  const sections: string[] = [];
+
+  for (const message of prompt) {
+    const textParts: string[] = [];
+
+    if (typeof message.content === "string") {
+      if (message.content.trim()) {
+        textParts.push(message.content.trim());
+      }
+    } else if (Array.isArray(message.content)) {
+      for (const part of message.content as Array<{ type?: string; text?: string; toolCallId?: string; result?: unknown }>) {
+        if (part.type === "text" && typeof part.text === "string" && part.text.trim()) {
+          textParts.push(part.text.trim());
+        }
+        if (part.type === "tool-result") {
+          textParts.push(`Tool result (${part.toolCallId ?? "unknown"}): ${typeof part.result === "string" ? part.result : JSON.stringify(part.result ?? {})}`);
+        }
+      }
+    }
+
+    if (textParts.length > 0) {
+      sections.push(`[${message.role}]\n${textParts.join("\n\n")}`);
+    }
+  }
+
+  return sections.length > 0 ? sections.join("\n\n") : "[user]\nContinue.";
+}

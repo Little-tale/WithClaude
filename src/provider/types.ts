@@ -1,9 +1,11 @@
-export interface WithClaudeConfig {
+export interface ProviderCliConfig {
   provider: string;
   cliPath: string;
   cwd?: string;
   skipPermissions?: boolean;
 }
+
+export interface WithClaudeConfig extends ProviderCliConfig {}
 
 export interface WithClaudeProviderSettings {
   cliPath?: string;
@@ -60,4 +62,29 @@ export interface ClaudeCliStreamMessage {
   result?: string;
   is_error?: boolean;
   index?: number;
+}
+
+export interface GeminiCliStreamMessage {
+  type: string;
+  timestamp?: string;
+  session_id?: string;
+  model?: string;
+  content?: string;
+  tool_name?: string;
+  tool_id?: string;
+  parameters?: unknown;
+  status?: string;
+  output?: unknown;
+  error?: unknown;
+  stats?: {
+    models?: Record<string, {
+      tokens?: {
+        prompt?: number;
+        input?: number;
+        candidates?: number;
+        output?: number;
+        total?: number;
+      };
+    }>;
+  };
 }
