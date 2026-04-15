@@ -1,6 +1,18 @@
 # Agent Workflow MVP — Handoff
 
-Updated: 2026-04-10 (loop issue fixed via v3-style finish emission; second `doStream` empty-output bug also fixed; plugin now reads global installer config with project-local override; installer now matches XDG-first config resolution and nested overrides merge correctly)
+Updated: 2026-04-15 (OMOA integration plan drafted — see `Plan/omoa-claude-cli-integration-plan.md`)
+
+## Next phase: OMOA integration
+
+**Plan**: `Plan/omoa-claude-cli-integration-plan.md` — provider-first MVP plan for wiring `with-claude` into OMOA with Sisyphus/Atlas first and Hephaestus deferred.
+
+**Summary**: Integrate the `with-claude` CLI provider into oh-my-openagent so OMOA agents use Claude CLI instead of HTTP API. Sisyphus → `with-claude/opus`, Atlas → `with-claude/sonnet`. Hephaestus is blocked by a `requiresProvider` guard (investigation planned). Key gate: Task 1 validates that OMOA honors `with-claude/*` model overrides in `oh-my-openagent.jsonc`.
+
+**Critical finding from OMOA binary (v3.12.3)**: Each agent has a hardcoded `fallbackChain` with `{providers[], model, variant}`. Sisyphus/Atlas already list `anthropic/claude-*` in their chains. Hephaestus has `requiresProvider: ["openai","github-copilot","venice","opencode"]` — explicitly blocks non-listed providers. The `deep` category has `requiresModel: "gpt-5.3-codex"` and `artistry` has `requiresModel: "gemini-3.1-pro"`.
+
+---
+
+Previous update: 2026-04-10 (loop issue fixed via v3-style finish emission; second `doStream` empty-output bug also fixed; plugin now reads global installer config with project-local override; installer now matches XDG-first config resolution and nested overrides merge correctly)
 
 ## Status at a glance
 
