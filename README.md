@@ -1,6 +1,8 @@
 # opencode-with-claude
 
-Claude CLI and Gemini CLI provider plus workflow surfaces for OpenCode.
+[English](./README.md) | [한국어](./README.ko.md)
+
+Claude CLI provider and Gemini CLI and workflow surfaces for OpenCode.
 
 This package gives you two things:
 
@@ -194,6 +196,25 @@ If one role should use a different model, keep the shared default and override o
 In that example, planning uses `opus` while implementation and review still use `sonnet`.
 
 Gemini-backed subagents use the separate `geminiCli` section and follow the Gemini CLI default model unless you override it explicitly.
+
+### Example: `oh-my-opencode.json`
+
+If you are also using oh-my-openagent / oh-my-opencode-style agent overrides, point the target agents at the `with-claude/*` models explicitly:
+
+```jsonc
+{
+  "agents": {
+    "sisyphus": {
+      "model": "with-claude/opus"
+    },
+    "atlas": {
+      "model": "with-claude/sonnet"
+    }
+  }
+}
+```
+
+That works only after the `with-claude` provider is already installed and present in your OpenCode provider config.
 
 ## Package surfaces
 
