@@ -39,7 +39,7 @@ function withClaudeConfigJson(overrides: {
   agentPlanModel?: string;
   geminiCommand?: string;
   geminiCommonArgs?: string[];
-  geminiDefaultModel?: string | null;
+  geminiAuto?: string | null;
   designModel?: string | null;
   reviewGeminiModel?: string | null;
   agentDesignModel?: string;
@@ -62,7 +62,7 @@ function withClaudeConfigJson(overrides: {
     return overrides[key] ?? undefined;
   };
 
-  const readGeminiModelOverride = (key: "geminiDefaultModel" | "designModel" | "reviewGeminiModel", fallback?: string): string | undefined => {
+  const readGeminiModelOverride = (key: "geminiAuto" | "designModel" | "reviewGeminiModel", fallback?: string): string | undefined => {
     if (!(key in overrides)) {
       return fallback;
     }
@@ -73,9 +73,9 @@ function withClaudeConfigJson(overrides: {
   const planModel = readModelOverride("planModel", defaultModel ? undefined : "sonnet");
   const implModel = readModelOverride("implModel", defaultModel ? undefined : "sonnet");
   const reviewModel = readModelOverride("reviewModel", defaultModel ? undefined : "sonnet");
-  const geminiDefaultModel = readGeminiModelOverride("geminiDefaultModel");
-  const designModel = readGeminiModelOverride("designModel", geminiDefaultModel ? undefined : undefined);
-  const reviewGeminiModel = readGeminiModelOverride("reviewGeminiModel", geminiDefaultModel ? undefined : undefined);
+  const geminiAuto = readGeminiModelOverride("geminiAuto");
+  const designModel = readGeminiModelOverride("designModel", geminiAuto ? undefined : undefined);
+  const reviewGeminiModel = readGeminiModelOverride("reviewGeminiModel", geminiAuto ? undefined : undefined);
 
   const roleConfig = (model: string | undefined, args: string[]) => ({
     ...(model ? { model } : {}),
@@ -104,7 +104,7 @@ function withClaudeConfigJson(overrides: {
       geminiCli: {
         command: geminiCommand,
         commonArgs: geminiCommonArgs,
-        ...(geminiDefaultModel ? { defaultModel: geminiDefaultModel } : {}),
+        ...(geminiAuto ? { auto: geminiAuto } : {}),
         roles: {
           designGemini: {
             ...(designModel ? { model: designModel } : {}),
@@ -273,20 +273,23 @@ test("run_gemini_design and run_gemini_review persist implementation and review 
   const geminiScript = path.join(projectRoot, "fake-gemini.js");
   await writeFile(
     geminiScript,
-    [
-      "#!/usr/bin/env node",
-      'const prompt = process.argv.at(-1) ?? "";',
-      'if (prompt.includes("reviewGemini")) {',
-      '  process.stdout.write(JSON.stringify({ response: JSON.stringify({ decision: "approved", summary: "Gemini review ok" }) }));',
-      '} else {',
-      '  process.stdout.write(JSON.stringify({ response: JSON.stringify({ summary: "Gemini design ok" }) }));',
-      '}'
-    ].join("\n"),
+      [
+        "#!/usr/bin/env node",
+        'const args = process.argv.slice(2);',
+        'const modelIndex = args.indexOf("--model");',
+        'const model = modelIndex >= 0 ? args[modelIndex + 1] : "missing-model";',
+        'const prompt = process.argv.at(-1) ?? "";',
+        'if (prompt.includes("reviewGemini")) {',
+        '  process.stdout.write(JSON.stringify({ response: JSON.stringify({ decision: "approved", summary: `Gemini review ok:${model}` }) }));',
+        '} else {',
+        '  process.stdout.write(JSON.stringify({ response: JSON.stringify({ summary: `Gemini design ok:${model}` }) }));',
+        '}'
+      ].join("\n"),
     "utf8"
   );
   await writeWithClaudeConfig(
     path.join(projectRoot, ".opencode", "opencode-with-claude.jsonc"),
-    withClaudeConfigJson({ geminiCommand: process.execPath, geminiCommonArgs: [geminiScript, "--output-format", "json", "-p"] })
+    withClaudeConfigJson({ geminiCommand: process.execPath, geminiCommonArgs: [geminiScript, "--output-format", "json", "-p"], geminiAuto: "auto", reviewGeminiModel: "pro" })
   );
   process.env.PLANNER_TRANSPORT = "command";
   process.env.PLANNER_COMMAND = process.execPath;
@@ -332,8 +335,8 @@ test("run_gemini_design and run_gemini_review persist implementation and review 
     assert.match(reviewedResult, /^# Gemini Reviewed Task/m);
 
     const context = await getTaskContext!.execute!({ taskId });
-    assert.match(context, /Gemini design ok/);
-    assert.match(context, /Gemini review ok/);
+    assert.match(context, /Gemini design ok:auto/);
+    assert.match(context, /Gemini review ok:pro/);
   } finally {
     process.env = { ...originalEnv };
   }
@@ -993,6 +996,102 @@ test("session startup reloads migrated Claude config before running plan tools",
 
     assert.match(context, /opus/);
     assert.doesNotMatch(context, /sonnet/);
+  } finally {
+    process.env = { ...originalEnv };
+  }
+});
+
+test("legacy gemini defaultModel override is migrated to auto and still applies after startup", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-sync-gemini-legacy-"));
+  const xdgConfigHome = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-sync-gemini-legacy-xdg-"));
+  const configRoot = path.join(xdgConfigHome, "opencode");
+  const managedConfigPath = path.join(configRoot, ".opencode", "opencode-with-claude.jsonc");
+  const geminiScript = path.join(projectRoot, "fake-gemini-sync-reload.js");
+
+  await writeFile(
+    geminiScript,
+    [
+      "#!/usr/bin/env node",
+      'const args = process.argv.slice(2);',
+      'const modelIndex = args.indexOf("--model");',
+      'const model = modelIndex >= 0 ? args[modelIndex + 1] : "missing-model";',
+      'const prompt = process.argv.at(-1) ?? "";',
+      'if (prompt.includes("reviewGemini")) {',
+      '  process.stdout.write(JSON.stringify({ response: JSON.stringify({ decision: "approved", summary: model }) }));',
+      '} else {',
+      '  process.stdout.write(JSON.stringify({ response: JSON.stringify({ summary: model }) }));',
+      '}'
+    ].join("\n"),
+    "utf8"
+  );
+
+  await writeWithClaudeConfig(
+    managedConfigPath,
+    JSON.stringify(
+      {
+        geminiCli: {
+          command: process.execPath,
+          commonArgs: [geminiScript, "--output-format", "json", "-p"],
+          timeoutMs: 900000,
+          defaultModel: "flash",
+          roles: {
+            designGemini: { args: [] },
+            reviewGemini: { args: [] }
+          }
+        }
+      },
+      null,
+      2
+    )
+  );
+
+  process.env.XDG_CONFIG_HOME = xdgConfigHome;
+  process.env.PLANNER_TRANSPORT = "command";
+  process.env.PLANNER_COMMAND = process.execPath;
+  process.env.PLANNER_ARGS = JSON.stringify(["-e", 'process.stdout.write(JSON.stringify({ planText: "# Plan\\n\\n- do ui" }))']);
+  process.env.DATA_DIR = "./data";
+
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: { tui: { showToast: async () => {} } } as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    await hooks.event?.({ event: { type: "session.created", properties: { info: {} } } } as never);
+
+    const migratedManagedConfig = await readFile(managedConfigPath, "utf8");
+    assert.match(migratedManagedConfig, /"auto": "flash"/);
+    assert.doesNotMatch(migratedManagedConfig, /defaultModel/);
+
+    const createTask = (hooks.tool as PluginToolMap).create_task;
+    const savePlanRevision = (hooks.tool as PluginToolMap).save_plan_revision;
+    const approveTask = (hooks.tool as PluginToolMap).approve_task;
+    const runGeminiDesign = (hooks.tool as PluginToolMap).run_gemini_design;
+    const getTaskContext = (hooks.tool as PluginToolMap).get_task_context;
+
+    const created = await createTask!.execute!({
+      title: "Legacy Gemini defaultModel task",
+      request: "Use migrated Gemini defaultModel immediately after startup",
+      requesterId: "plugin-user"
+    });
+    const taskId = created.match(/- taskId: (task-[a-z0-9-]+)/i)?.[1];
+    assert.ok(taskId);
+
+    await savePlanRevision!.execute!({
+      taskId,
+      actorId: "planClaude",
+      planText: "# Plan\n\n- use migrated gemini config"
+    });
+    await approveTask!.execute!({ taskId, approverId: "planClaude" });
+    await runGeminiDesign!.execute!({ taskId, actorId: "designGemini" });
+    const context = await getTaskContext!.execute!({ taskId });
+
+    assert.match(context, /flash/);
+    assert.doesNotMatch(context, /missing-model/);
   } finally {
     process.env = { ...originalEnv };
   }

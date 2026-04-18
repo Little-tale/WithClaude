@@ -33,10 +33,29 @@ export async function readWithClaudeConfigFile(filePath: string): Promise<WithCl
   try {
     const content = await readFile(filePath, "utf8");
     const parsed = parseJsoncObject(content) as unknown;
-    return parsed && typeof parsed === "object" ? (parsed as WithClaudeConfig) : {};
+    return parsed && typeof parsed === "object" ? normalizeLegacyGeminiConfig(parsed as WithClaudeConfig) : {};
   } catch {
     return {};
   }
+}
+
+function normalizeLegacyGeminiConfig(config: WithClaudeConfig): WithClaudeConfig {
+  const geminiCli = config.geminiCli as (GeminiCliConfig & { defaultModel?: string }) | undefined;
+  if (!geminiCli) {
+    return config;
+  }
+
+  if (geminiCli.auto || !geminiCli.defaultModel) {
+    return config;
+  }
+
+  return {
+    ...config,
+    geminiCli: {
+      ...geminiCli,
+      auto: geminiCli.defaultModel
+    }
+  };
 }
 
 export function mergeWithClaudeConfig(base: WithClaudeConfig, override: WithClaudeConfig): WithClaudeConfig {

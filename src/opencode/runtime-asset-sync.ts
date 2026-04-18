@@ -72,6 +72,13 @@ async function migrateLegacyOverrideFile(configDir: string): Promise<boolean> {
   } catch {
     return false;
   }
+
+  const migratedLegacyGemini = migrateLegacyGeminiDefaultModel(existingParsed);
+  if (migratedLegacyGemini.changed) {
+    await writeFile(target, `${JSON.stringify(migratedLegacyGemini.value, null, 2)}\n`, "utf8");
+    return true;
+  }
+
   const bundledParsed = await readBundledDefaultConfig();
   if (JSON.stringify(existingParsed) !== JSON.stringify(bundledParsed) && !isLegacyManagedConfig(existingParsed)) {
     return false;
@@ -79,6 +86,35 @@ async function migrateLegacyOverrideFile(configDir: string): Promise<boolean> {
 
   await writeFile(target, bundledOverrideTemplate(), "utf8");
   return true;
+}
+
+function migrateLegacyGeminiDefaultModel(value: unknown): { changed: boolean; value: unknown } {
+  if (!value || typeof value !== "object") {
+    return { changed: false, value };
+  }
+
+  const root = value as Record<string, unknown>;
+  const geminiCli = root.geminiCli;
+  if (!geminiCli || typeof geminiCli !== "object") {
+    return { changed: false, value };
+  }
+
+  const geminiRecord = geminiCli as Record<string, unknown>;
+  if (typeof geminiRecord.auto === "string" || typeof geminiRecord.defaultModel !== "string") {
+    return { changed: false, value };
+  }
+
+  const { defaultModel, ...restGemini } = geminiRecord;
+  return {
+    changed: true,
+    value: {
+      ...root,
+      geminiCli: {
+        ...restGemini,
+        auto: defaultModel
+      }
+    }
+  };
 }
 
 export function createRuntimeAssetSyncHook(ctx: PluginInput) {
