@@ -31,7 +31,7 @@ export class WithGeminiLanguageModel implements LanguageModelV2 {
   }
 
   private get cliModelId(): string | undefined {
-    return this.modelId === "default" ? undefined : this.modelId;
+    return this.modelId;
   }
 
   async doGenerate(options: Parameters<LanguageModelV2["doGenerate"]>[0]): Promise<Awaited<ReturnType<LanguageModelV2["doGenerate"]>>> {

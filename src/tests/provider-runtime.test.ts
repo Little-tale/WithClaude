@@ -67,7 +67,7 @@ async function writeFakeClaudeScript(mode: "generate" | "generate-hang" | "strea
   return { dir, file };
 }
 
-async function writeFakeGeminiScript(mode: "generate" | "stream" | "stream-fail" | "generate-no-result" | "generate-failed-result" | "generate-missing-status" | "stream-missing-status" | "stream-no-result-exit-0") {
+async function writeFakeGeminiScript(mode: "generate" | "generate-capture-model" | "stream" | "stream-fail" | "generate-no-result" | "generate-failed-result" | "generate-missing-status" | "stream-missing-status" | "stream-no-result-exit-0") {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agentwf-provider-runtime-gemini-"));
   const file = path.join(dir, "fake-gemini.js");
 
@@ -77,6 +77,16 @@ async function writeFakeGeminiScript(mode: "generate" | "stream" | "stream-fail"
     'process.stdout.write(JSON.stringify({ type: "thought", content: "thinking" }) + "\\n");',
     'process.stdout.write(JSON.stringify({ type: "message", content: "Hello from Gemini CLI" }) + "\\n");',
     'process.stdout.write(JSON.stringify({ type: "result", status: "success", stats: { models: { "gemini-2.5-pro": { tokens: { prompt: 4, candidates: 6, total: 10 } } } } }) + "\\n");'
+  ].join("\n");
+
+  const generateCaptureModelScript = [
+    "#!/usr/bin/env node",
+    'const args = process.argv.slice(2);',
+    'const modelIndex = args.indexOf("--model");',
+    'const model = modelIndex >= 0 ? args[modelIndex + 1] : "missing-model";',
+    'process.stdout.write(JSON.stringify({ type: "init", session_id: "gemini-session-capture", model }) + "\\n");',
+    'process.stdout.write(JSON.stringify({ type: "message", content: model }) + "\\n");',
+    'process.stdout.write(JSON.stringify({ type: "result", status: "success", stats: { models: { [model]: { tokens: { prompt: 1, candidates: 1, total: 2 } } } } }) + "\\n");'
   ].join("\n");
 
   const streamScript = [
@@ -132,6 +142,8 @@ async function writeFakeGeminiScript(mode: "generate" | "stream" | "stream-fail"
 
   await writeFile(file, mode === "generate"
     ? generateScript
+    : mode === "generate-capture-model"
+      ? generateCaptureModelScript
     : mode === "stream"
       ? streamScript
       : mode === "stream-fail"
@@ -408,7 +420,7 @@ test("WithClaudeLanguageModel does not synthesize title prompts when tools are p
 
 test("WithGeminiLanguageModel doGenerate parses stream-json CLI output", async () => {
   const { dir, file } = await writeFakeGeminiScript("generate");
-  const model = new WithGeminiLanguageModel("default", {
+  const model = new WithGeminiLanguageModel("auto", {
     provider: "with-gemini",
     cliPath: file,
     cwd: dir,
@@ -428,7 +440,7 @@ test("WithGeminiLanguageModel doGenerate parses stream-json CLI output", async (
   } as never);
 
   assert.ok(result.response);
-  assert.equal(result.response.modelId, "default");
+  assert.equal(result.response.modelId, "auto");
   assert.match(JSON.stringify(result.content), /Hello from Gemini CLI/);
   assert.equal(result.usage.outputTokens, 6);
   assert.equal(result.providerMetadata?.["with-gemini"]?.sessionId, "gemini-session-1");
@@ -436,7 +448,7 @@ test("WithGeminiLanguageModel doGenerate parses stream-json CLI output", async (
 
 test("WithGeminiLanguageModel doGenerate rejects missing terminal result events", async () => {
   const { dir, file } = await writeFakeGeminiScript("generate-no-result");
-  const model = new WithGeminiLanguageModel("default", {
+  const model = new WithGeminiLanguageModel("auto", {
     provider: "with-gemini",
     cliPath: file,
     cwd: dir,
@@ -461,7 +473,7 @@ test("WithGeminiLanguageModel doGenerate rejects missing terminal result events"
 
 test("WithGeminiLanguageModel doGenerate rejects non-success result status", async () => {
   const { dir, file } = await writeFakeGeminiScript("generate-failed-result");
-  const model = new WithGeminiLanguageModel("default", {
+  const model = new WithGeminiLanguageModel("auto", {
     provider: "with-gemini",
     cliPath: file,
     cwd: dir,
@@ -486,7 +498,7 @@ test("WithGeminiLanguageModel doGenerate rejects non-success result status", asy
 
 test("WithGeminiLanguageModel doGenerate rejects missing result status", async () => {
   const { dir, file } = await writeFakeGeminiScript("generate-missing-status");
-  const model = new WithGeminiLanguageModel("default", {
+  const model = new WithGeminiLanguageModel("auto", {
     provider: "with-gemini",
     cliPath: file,
     cwd: dir,
@@ -511,7 +523,7 @@ test("WithGeminiLanguageModel doGenerate rejects missing result status", async (
 
 test("WithGeminiLanguageModel doStream emits text, tool calls, and finish metadata", async () => {
   const { dir, file } = await writeFakeGeminiScript("stream");
-  const model = new WithGeminiLanguageModel("default", {
+  const model = new WithGeminiLanguageModel("auto", {
     provider: "with-gemini",
     cliPath: file,
     cwd: dir,
@@ -538,7 +550,7 @@ test("WithGeminiLanguageModel doStream emits text, tool calls, and finish metada
     parts.push(next.value as Record<string, unknown>);
   }
 
-  assert.ok(parts.some((part) => part.type === "response-metadata" && part.modelId === "default"));
+  assert.ok(parts.some((part) => part.type === "response-metadata" && part.modelId === "auto"));
   assert.ok(parts.some((part) => part.type === "text-delta" && part.delta === "Hello "));
   assert.ok(parts.some((part) => part.type === "text-delta" && part.delta === "Gemini stream"));
   assert.ok(parts.some((part) => part.type === "tool-call" && part.toolName === "read"));
@@ -548,7 +560,7 @@ test("WithGeminiLanguageModel doStream emits text, tool calls, and finish metada
 
 test("WithGeminiLanguageModel doStream surfaces non-zero exit failures instead of finishing with stop", async () => {
   const { dir, file } = await writeFakeGeminiScript("stream-fail");
-  const model = new WithGeminiLanguageModel("default", {
+  const model = new WithGeminiLanguageModel("auto", {
     provider: "with-gemini",
     cliPath: file,
     cwd: dir,
@@ -582,7 +594,7 @@ test("WithGeminiLanguageModel doStream surfaces non-zero exit failures instead o
 
 test("WithGeminiLanguageModel doStream rejects missing result status", async () => {
   const { dir, file } = await writeFakeGeminiScript("stream-missing-status");
-  const model = new WithGeminiLanguageModel("default", {
+  const model = new WithGeminiLanguageModel("auto", {
     provider: "with-gemini",
     cliPath: file,
     cwd: dir,
@@ -615,7 +627,7 @@ test("WithGeminiLanguageModel doStream rejects missing result status", async () 
 
 test("WithGeminiLanguageModel doStream rejects zero-exit runs without a terminal result event", async () => {
   const { dir, file } = await writeFakeGeminiScript("stream-no-result-exit-0");
-  const model = new WithGeminiLanguageModel("default", {
+  const model = new WithGeminiLanguageModel("auto", {
     provider: "with-gemini",
     cliPath: file,
     cwd: dir,
@@ -644,4 +656,30 @@ test("WithGeminiLanguageModel doStream rejects zero-exit runs without a terminal
 
   assert.ok(parts.some((part) => part.type === "error" && String(part.error).includes("terminal result event")));
   assert.ok(!parts.some((part) => part.type === "finish"));
+});
+
+test("WithGeminiLanguageModel passes the selected alias directly to Gemini CLI", async () => {
+  const { dir, file } = await writeFakeGeminiScript("generate-capture-model");
+  const model = new WithGeminiLanguageModel("flash", {
+    provider: "with-gemini",
+    cliPath: file,
+    cwd: dir,
+    skipPermissions: false
+  });
+
+  const result = await model.doGenerate({
+    prompt: [{ role: "user", content: "Say hello" }],
+    maxOutputTokens: 200,
+    temperature: 0,
+    topP: 1,
+    topK: 0,
+    providerOptions: {},
+    messages: [] as never,
+    abortSignal: new AbortController().signal,
+    responseFormat: { type: "text" } as never
+  } as never);
+
+  assert.match(JSON.stringify(result.content), /flash/);
+  assert.ok(result.response);
+  assert.equal(result.response.modelId, "flash");
 });

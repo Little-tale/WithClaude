@@ -31,10 +31,14 @@ test("package root exports a Gemini provider factory", () => {
   assert.equal(typeof provider, "function");
   assert.equal(typeof provider.languageModel, "function");
 
-  const model = provider("default");
+  const model = provider("auto");
   assert.ok(model instanceof WithGeminiLanguageModel);
-  assert.equal(model.modelId, "default");
+  assert.equal(model.modelId, "auto");
   assert.equal(model.provider, "with-gemini");
+
+  const flashModel = provider("flash");
+  assert.ok(flashModel instanceof WithGeminiLanguageModel);
+  assert.equal(flashModel.modelId, "flash");
 });
 
 test("default provider factory returns Gemini runtime when name is with-gemini", () => {
@@ -44,7 +48,7 @@ test("default provider factory returns Gemini runtime when name is with-gemini",
     name: "with-gemini"
   });
 
-  const model = provider("default");
+  const model = provider("auto");
   assert.ok(model instanceof WithGeminiLanguageModel);
   assert.equal(model.provider, "with-gemini");
   assert.ok(!(model instanceof WithClaudeLanguageModel));

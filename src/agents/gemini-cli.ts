@@ -17,7 +17,7 @@ export type GeminiCliConfig = {
   command?: string;
   commonArgs?: string[];
   timeoutMs?: number;
-  defaultModel?: string;
+  auto?: string;
   roles?: Partial<Record<GeminiCliRole, GeminiCliRoleConfig>>;
 };
 
@@ -48,7 +48,7 @@ export async function runGeminiCliJson<T>(options: {
   const roleConfig = options.config.roles?.[options.role] ?? {};
   const timeoutMs = options.config.timeoutMs ?? 900000;
   const args = commonArgs.map((value) => replaceTemplate(value, options.templates ?? {}));
-  const model = roleConfig.model ?? options.config.defaultModel;
+  const model = roleConfig.model ?? options.config.auto;
 
   if (model) {
     args.push("--model", model);
