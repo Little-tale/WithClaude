@@ -114,8 +114,26 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
       "with-gemini": {
         npm: PACKAGE_NAME,
         models: {
-          default: {
-            name: "WithGemini Default",
+          auto: {
+            name: "WithGemini Auto",
+            attachment: false,
+            limit: { context: 1000000, output: 16384 },
+            capabilities: { reasoning: true, toolcall: true }
+          },
+          pro: {
+            name: "WithGemini Pro",
+            attachment: false,
+            limit: { context: 1000000, output: 16384 },
+            capabilities: { reasoning: true, toolcall: true }
+          },
+          flash: {
+            name: "WithGemini Flash",
+            attachment: false,
+            limit: { context: 1000000, output: 16384 },
+            capabilities: { reasoning: true, toolcall: true }
+          },
+          "flash-lite": {
+            name: "WithGemini Flash Lite",
             attachment: false,
             limit: { context: 1000000, output: 16384 },
             capabilities: { reasoning: true, toolcall: true }
@@ -129,7 +147,7 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
         description: "Gemini implementation executor for frontend styling and component structure tasks",
         mode: "subagent",
         hidden: false,
-        model: "with-gemini/default",
+        model: "with-gemini/auto",
         prompt: runtimeManagedPrompt("designGemini"),
         tools: {}
       },
@@ -161,7 +179,7 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
         description: "Gemini review assistant for implementation verification",
         mode: "subagent",
         hidden: false,
-        model: "with-gemini/default",
+        model: "with-gemini/auto",
         prompt: runtimeManagedPrompt("reviewGemini"),
         tools: {}
       }

@@ -48,8 +48,44 @@
     "with-gemini": {
       "npm": "file:///Users/gosiphone/Repo/AiAgentUsage/WithClaude/dist/index.js",
       "models": {
-        "default": {
-          "name": "WithGemini Default",
+        "auto": {
+          "name": "WithGemini Auto",
+          "attachment": false,
+          "limit": {
+            "context": 1000000,
+            "output": 16384
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolcall": true
+          }
+        },
+        "pro": {
+          "name": "WithGemini Pro",
+          "attachment": false,
+          "limit": {
+            "context": 1000000,
+            "output": 16384
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolcall": true
+          }
+        },
+        "flash": {
+          "name": "WithGemini Flash",
+          "attachment": false,
+          "limit": {
+            "context": 1000000,
+            "output": 16384
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolcall": true
+          }
+        },
+        "flash-lite": {
+          "name": "WithGemini Flash Lite",
           "attachment": false,
           "limit": {
             "context": 1000000,
@@ -83,7 +119,7 @@
       "description": "Gemini implementation executor for frontend styling and component structure tasks",
       "mode": "subagent",
       "hidden": false,
-      "model": "with-gemini/default",
+      "model": "with-gemini/auto",
       "prompt": "{file:.opencode/agents/designGemini.md}",
       "tools": {}
     },
@@ -107,7 +143,7 @@
       "description": "Gemini review assistant for implementation verification",
       "mode": "subagent",
       "hidden": false,
-      "model": "with-gemini/default",
+      "model": "with-gemini/auto",
       "prompt": "{file:.opencode/agents/reviewGemini.md}",
       "tools": {}
     }

@@ -23,11 +23,11 @@ test("opencode.jsonc declares workflow providers and binds Claude and Gemini age
   assert.equal(parsed.provider?.["with-gemini"]?.npm, expectedDistUrl);
   await access(path.join(process.cwd(), "dist", "index.js"));
   assert.deepEqual(Object.keys(parsed.provider?.["with-claude"]?.models ?? {}).sort(), ["haiku", "opus", "sonnet"]);
-  assert.deepEqual(Object.keys(parsed.provider?.["with-gemini"]?.models ?? {}).sort(), ["default"]);
+  assert.deepEqual(Object.keys(parsed.provider?.["with-gemini"]?.models ?? {}).sort(), ["auto", "flash", "flash-lite", "pro"]);
   assert.equal(parsed.provider?.["with-gemini"]?.options?.cliPath, "gemini");
   assert.equal(parsed.agent?.planClaude?.model, "with-claude/opus");
   assert.equal(parsed.agent?.implClaude?.model, "with-claude/sonnet");
   assert.equal(parsed.agent?.reviewClaude?.model, "with-claude/sonnet");
-  assert.equal(parsed.agent?.designGemini?.model, "with-gemini/default");
-  assert.equal(parsed.agent?.reviewGemini?.model, "with-gemini/default");
+  assert.equal(parsed.agent?.designGemini?.model, "with-gemini/auto");
+  assert.equal(parsed.agent?.reviewGemini?.model, "with-gemini/auto");
 });

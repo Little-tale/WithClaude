@@ -21,10 +21,14 @@ test("installer creates baseline OpenCode config and bundled assets in a new pro
   assert.match(output, /Installed @little_tale\/opencode-with-claude into global OpenCode config/);
   assert.match(opencodeConfig, /"npm": "@little_tale\/opencode-with-claude"/);
   assert.match(opencodeConfig, /"with-gemini"/);
+  assert.match(opencodeConfig, /"auto"/);
+  assert.match(opencodeConfig, /"flash-lite"/);
+  assert.match(opencodeConfig, /"with-gemini\/auto"/);
   assert.match(opencodeConfig, /Runtime-managed designGemini prompt/);
   assert.match(opencodeConfig, /Runtime-managed planClaude prompt/);
   assert.match(roleConfig, /Optional user overrides only/);
   assert.match(roleConfig, /"geminiCli"/);
+  assert.match(roleConfig, /"auto": "flash"/);
   assert.match(commandPrompt, /@planClaude/);
   assert.match(designCommandPrompt, /@designGemini/);
   assert.match(pluginPackageJson, /"@little_tale\/opencode-with-claude": "latest"/);
