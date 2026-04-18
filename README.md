@@ -98,7 +98,12 @@ The package exposes these provider-backed models:
 - `with-claude/haiku`
 - `with-claude/sonnet`
 - `with-claude/opus`
-- `with-gemini/default`
+- `with-gemini/auto`
+- `with-gemini/pro`
+- `with-gemini/flash`
+- `with-gemini/flash-lite`
+
+The Gemini models above are Gemini CLI aliases exposed directly through the local provider.
 
 ### Workflow subagents
 
@@ -161,6 +166,7 @@ Use it to change:
 - the default Claude model for all workflow roles
 - per-role model overrides when one role should differ
 - Claude CLI arguments
+- the default Gemini CLI alias for Gemini workflow roles
 - Gemini CLI command / timeout / role overrides
 - timeouts and related runtime options
 
@@ -195,7 +201,36 @@ If one role should use a different model, keep the shared default and override o
 
 In that example, planning uses `opus` while implementation and review still use `sonnet`.
 
-Gemini-backed subagents use the separate `geminiCli` section and follow the Gemini CLI default model unless you override it explicitly.
+Gemini-backed subagents use the separate `geminiCli` section.
+
+The simplest Gemini setup is to choose the shared Gemini alias once:
+
+```jsonc
+{
+  "geminiCli": {
+    "auto": "flash"
+  }
+}
+```
+
+That applies the same Gemini CLI alias to `@designGemini` and `@reviewGemini` by default.
+
+If you want a more specific setup, keep the shared Gemini alias and override only the role that should differ.
+
+```jsonc
+{
+  "geminiCli": {
+    "auto": "auto",
+    "roles": {
+      "reviewGemini": {
+        "model": "pro"
+      }
+    }
+  }
+}
+```
+
+This is an advanced override. The default path is to use one shared Gemini alias unless a role truly needs something different.
 
 ### Example: `oh-my-opencode.json`
 

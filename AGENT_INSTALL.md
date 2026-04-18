@@ -25,6 +25,7 @@ After installation, the user's OpenCode config should include:
 
 - the `with-claude` provider
 - the `with-gemini` provider
+- the Gemini CLI alias-backed models `with-gemini/auto`, `with-gemini/pro`, `with-gemini/flash`, and `with-gemini/flash-lite`
 - `@planClaude`
 - `@implClaude`
 - `@designGemini`
