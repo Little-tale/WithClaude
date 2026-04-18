@@ -21,6 +21,7 @@
     "command": "gemini",
     "commonArgs": ["--output-format", "json", "-p"],
     "timeoutMs": 900000,
+    "auto": "auto",
     "roles": {
       "designGemini": {},
       "reviewGemini": {}
