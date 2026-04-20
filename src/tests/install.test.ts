@@ -31,6 +31,9 @@ test("installer creates baseline OpenCode config and bundled assets in a new pro
   assert.match(roleConfig, /"auto": "flash"/);
   assert.match(commandPrompt, /@planClaude/);
   assert.match(designCommandPrompt, /@designGemini/);
+  assert.match(designCommandPrompt, /direct-call design agent/i);
+  assert.doesNotMatch(designCommandPrompt, /approved plan/i);
+  assert.doesNotMatch(designCommandPrompt, /run_gemini_design/);
   assert.match(pluginPackageJson, /"@little_tale\/opencode-with-claude": "latest"/);
   assert.match(pluginShim, /@little_tale\/opencode-with-claude\/plugin/);
 });

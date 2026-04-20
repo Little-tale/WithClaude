@@ -116,12 +116,11 @@
       "tools": {}
     },
     "designGemini": {
-      "description": "Gemini implementation executor for frontend styling and component structure tasks",
+      "description": "Gemini direct-call design agent for frontend styling and component structure work",
       "mode": "subagent",
       "hidden": false,
       "model": "with-gemini/auto",
-      "prompt": "{file:.opencode/agents/designGemini.md}",
-      "tools": {}
+      "prompt": "{file:.opencode/agents/designGemini.md}"
     },
     "planClaude": {
       "description": "Claude planning assistant for workflow task plans",

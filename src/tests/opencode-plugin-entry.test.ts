@@ -165,7 +165,7 @@ test("plugin entry exports a default OpenCode plugin with orchestration tools", 
     await hooks.config?.(config as never);
     assert.deepEqual(Object.keys(config.agent ?? {}).sort(), ["designGemini", "implClaude", "planClaude", "reviewClaude", "reviewGemini"]);
     assert.equal(config.agent?.designGemini?.mode, "subagent");
-    assert.match(config.agent?.designGemini?.description ?? "", /frontend styling and component structure/);
+    assert.match(config.agent?.designGemini?.description ?? "", /direct-call design agent/);
     assert.equal(config.agent?.implClaude?.mode, "subagent");
     assert.match(config.agent?.implClaude?.description ?? "", /implementation executor/);
     assert.match(config.agent?.planClaude?.prompt ?? "", /planning assistant/);
@@ -175,12 +175,7 @@ test("plugin entry exports a default OpenCode plugin with orchestration tools", 
       "list_tasks",
       "run_claude_implementation"
     ]);
-    assert.deepEqual(Object.keys(config.agent?.designGemini?.tools ?? {}).sort(), [
-      "get_approved_plan",
-      "get_task_context",
-      "list_tasks",
-      "run_gemini_design"
-    ]);
+    assert.equal(config.agent?.designGemini?.tools, undefined);
     assert.equal(typeof (hooks as { [key: string]: unknown })["session.idle"], "function");
   } finally {
     process.env = { ...originalEnv };

@@ -144,12 +144,11 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
     },
     agent: {
       designGemini: {
-        description: "Gemini implementation executor for frontend styling and component structure tasks",
+        description: "Gemini direct-call design agent for frontend styling and component structure work",
         mode: "subagent",
         hidden: false,
         model: "with-gemini/auto",
-        prompt: runtimeManagedPrompt("designGemini"),
-        tools: {}
+        prompt: runtimeManagedPrompt("designGemini")
       },
       implClaude: {
         description: "Claude implementation executor for approved workflow tasks",

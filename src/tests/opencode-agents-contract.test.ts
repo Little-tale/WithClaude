@@ -32,9 +32,11 @@ test("agent manifests encode distinct role boundaries and workflow expectations"
   assert.match(planAgent, /Do not wait for the user to mention `\.md`, markdown, or saving before persisting the plan/);
   assert.match(planAgent, /Do not implement code/);
 
-  assert.match(designAgent, /## Preconditions/);
+  assert.match(designAgent, /## Working style/);
   assert.match(designAgent, /frontend styling and component structure/);
-  assert.match(designAgent, /run_gemini_design/);
+  assert.match(designAgent, /direct-call design agent/);
+  assert.doesNotMatch(designAgent, /run_gemini_design/);
+  assert.doesNotMatch(designAgent, /get_task_context/);
 
   assert.match(implAgent, /## Preconditions/);
   assert.match(implAgent, /Only continue if the task is in an implementation-ready state/);
@@ -60,6 +62,9 @@ test("command prompts delegate to the matching Claude and Gemini subagents", asy
 
   assert.match(designCommand, /@designGemini/);
   assert.match(designCommand, /Do not implement directly/i);
+  assert.match(designCommand, /direct-call design agent/i);
+  assert.doesNotMatch(designCommand, /approved plan/i);
+  assert.doesNotMatch(designCommand, /run_gemini_design/);
 
   assert.match(planCommand, /@planClaude/);
   assert.match(planCommand, /Do not write the plan yourself/i);
