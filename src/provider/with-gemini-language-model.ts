@@ -7,6 +7,7 @@ import type {
   LanguageModelV2Usage
 } from "@ai-sdk/provider";
 import { randomUUID } from "node:crypto";
+import { appendFileSync } from "node:fs";
 import { appendFile } from "node:fs/promises";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
@@ -14,6 +15,42 @@ import { createInterface } from "node:readline";
 import { getGeminiPromptText } from "./message-builder.js";
 import { mapTool } from "./tool-mapping.js";
 import type { GeminiCliStreamMessage, ProviderCliConfig } from "./types.js";
+
+type GeminiDebugStreamContext = {
+  mode: "generate" | "stream";
+  modelId: string;
+  provider: string;
+};
+
+function debugGeminiStreamLine(context: GeminiDebugStreamContext, line: string): void {
+  const logPath = process.env.WITH_CLAUDE_DEBUG_STREAM;
+  if (!logPath) return;
+
+  let messageType: string | null = null;
+  let status: string | null = null;
+  let sessionId: string | null = null;
+
+  try {
+    const parsed = JSON.parse(line) as GeminiCliStreamMessage;
+    messageType = typeof parsed.type === "string" ? parsed.type : null;
+    status = typeof parsed.status === "string" ? parsed.status : null;
+    sessionId = typeof parsed.session_id === "string" ? parsed.session_id : null;
+  } catch {
+    // Preserve raw output even when the line is not valid JSON.
+  }
+
+  appendFileSync(logPath, `${JSON.stringify({
+    provider: context.provider,
+    path: "provider",
+    mode: context.mode,
+    channel: "stdout",
+    modelId: context.modelId,
+    sessionId,
+    messageType,
+    status,
+    raw: line
+  })}\n`, "utf8");
+}
 
 export class WithGeminiLanguageModel implements LanguageModelV2 {
   readonly specificationVersion = "v3" as any;
@@ -55,7 +92,12 @@ export class WithGeminiLanguageModel implements LanguageModelV2 {
     const { parts, usage, sessionId } = await collectGeminiRun({
       cliPath: this.config.cliPath,
       cwd: this.config.cwd ?? process.cwd(),
-      cliArgs
+      cliArgs,
+      debug: {
+        mode: "generate",
+        modelId: this.modelId,
+        provider: this.config.provider
+      }
     });
 
     const content: LanguageModelV2Content[] = [];
@@ -158,6 +200,7 @@ export class WithGeminiLanguageModel implements LanguageModelV2 {
 
         rl.on("line", (line) => {
           if (!line.trim() || controllerClosed) return;
+          debugGeminiStreamLine({ mode: "stream", modelId: this.modelId, provider: this.config.provider }, line);
           try {
             const msg = JSON.parse(line) as GeminiCliStreamMessage;
             if (msg.type === "init") {
@@ -275,7 +318,7 @@ function buildGeminiCliArgs(modelId: string | undefined, skipPermissions: boolea
   return args;
 }
 
-async function collectGeminiRun(options: { cliPath: string; cwd: string; cliArgs: string[] }): Promise<{ parts: GeminiCollectedPart[]; usage: LanguageModelV2Usage; sessionId?: string }> {
+async function collectGeminiRun(options: { cliPath: string; cwd: string; cliArgs: string[]; debug?: GeminiDebugStreamContext }): Promise<{ parts: GeminiCollectedPart[]; usage: LanguageModelV2Usage; sessionId?: string }> {
   const proc = spawn(options.cliPath, options.cliArgs, { cwd: options.cwd, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, TERM: "xterm-256color" } });
   const rl = createInterface({ input: proc.stdout! });
   const parts: GeminiCollectedPart[] = [];
@@ -300,6 +343,9 @@ async function collectGeminiRun(options: { cliPath: string; cwd: string; cliArgs
 
     rl.on("line", (line) => {
       if (!line.trim()) return;
+      if (options.debug) {
+        debugGeminiStreamLine(options.debug, line);
+      }
       try {
         const msg = JSON.parse(line) as GeminiCliStreamMessage;
         if (msg.type === "init") sessionId = msg.session_id ?? sessionId;

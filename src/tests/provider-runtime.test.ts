@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { chmod, mkdtemp, writeFile } from "node:fs/promises";
+import { chmod, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -446,6 +446,45 @@ test("WithGeminiLanguageModel doGenerate parses stream-json CLI output", async (
   assert.equal(result.providerMetadata?.["with-gemini"]?.sessionId, "gemini-session-1");
 });
 
+test("WithGeminiLanguageModel doGenerate writes Gemini stdout lines to WITH_CLAUDE_DEBUG_STREAM", async () => {
+  const { dir, file } = await writeFakeGeminiScript("generate");
+  const logPath = path.join(dir, "gemini-debug.ndjson");
+  const previous = process.env.WITH_CLAUDE_DEBUG_STREAM;
+  process.env.WITH_CLAUDE_DEBUG_STREAM = logPath;
+
+  try {
+    const model = new WithGeminiLanguageModel("auto", {
+      provider: "with-gemini",
+      cliPath: file,
+      cwd: dir,
+      skipPermissions: false
+    });
+
+    await model.doGenerate({
+      prompt: [{ role: "user", content: "Say hello" }],
+      maxOutputTokens: 200,
+      temperature: 0,
+      topP: 1,
+      topK: 0,
+      providerOptions: {},
+      messages: [] as never,
+      abortSignal: new AbortController().signal,
+      responseFormat: { type: "text" } as never
+    } as never);
+
+    const lines = (await readFile(logPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
+    assert.ok(lines.some((line) => line.provider === "with-gemini" && line.mode === "generate" && line.channel === "stdout"));
+    assert.ok(lines.some((line) => line.messageType === "message" && String(line.raw).includes("Hello from Gemini CLI")));
+    assert.ok(lines.some((line) => line.messageType === "result" && line.status === "success"));
+  } finally {
+    if (previous === undefined) {
+      delete process.env.WITH_CLAUDE_DEBUG_STREAM;
+    } else {
+      process.env.WITH_CLAUDE_DEBUG_STREAM = previous;
+    }
+  }
+});
+
 test("WithGeminiLanguageModel doGenerate rejects missing terminal result events", async () => {
   const { dir, file } = await writeFakeGeminiScript("generate-no-result");
   const model = new WithGeminiLanguageModel("auto", {
@@ -556,6 +595,51 @@ test("WithGeminiLanguageModel doStream emits text, tool calls, and finish metada
   assert.ok(parts.some((part) => part.type === "tool-call" && part.toolName === "read"));
   assert.ok(parts.some((part) => part.type === "tool-result"));
   assert.ok(parts.some((part) => part.type === "finish" && (part.providerMetadata as Record<string, any> | undefined)?.["with-gemini"]?.sessionId === "gemini-session-stream"));
+});
+
+test("WithGeminiLanguageModel doStream writes Gemini stdout lines to WITH_CLAUDE_DEBUG_STREAM", async () => {
+  const { dir, file } = await writeFakeGeminiScript("stream");
+  const logPath = path.join(dir, "gemini-stream-debug.ndjson");
+  const previous = process.env.WITH_CLAUDE_DEBUG_STREAM;
+  process.env.WITH_CLAUDE_DEBUG_STREAM = logPath;
+
+  try {
+    const model = new WithGeminiLanguageModel("auto", {
+      provider: "with-gemini",
+      cliPath: file,
+      cwd: dir,
+      skipPermissions: false
+    });
+
+    const streamResult = await model.doStream({
+      prompt: [{ role: "user", content: "Say hello" }],
+      maxOutputTokens: 200,
+      temperature: 0,
+      topP: 1,
+      topK: 0,
+      providerOptions: {},
+      messages: [] as never,
+      abortSignal: new AbortController().signal,
+      responseFormat: { type: "text" } as never
+    } as never);
+
+    const reader = streamResult.stream.getReader();
+    while (true) {
+      const next = await reader.read();
+      if (next.done) break;
+    }
+
+    const lines = (await readFile(logPath, "utf8")).trim().split("\n").map((line) => JSON.parse(line) as Record<string, unknown>);
+    assert.ok(lines.some((line) => line.provider === "with-gemini" && line.mode === "stream" && line.channel === "stdout"));
+    assert.ok(lines.some((line) => line.messageType === "tool_use"));
+    assert.ok(lines.some((line) => line.messageType === "result" && line.status === "success"));
+  } finally {
+    if (previous === undefined) {
+      delete process.env.WITH_CLAUDE_DEBUG_STREAM;
+    } else {
+      process.env.WITH_CLAUDE_DEBUG_STREAM = previous;
+    }
+  }
 });
 
 test("WithGeminiLanguageModel doStream surfaces non-zero exit failures instead of finishing with stop", async () => {
