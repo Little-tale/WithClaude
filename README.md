@@ -102,8 +102,13 @@ The package exposes these provider-backed models:
 - `with-gemini/pro`
 - `with-gemini/flash`
 - `with-gemini/flash-lite`
+- `with-gemini-yolo/auto`
+- `with-gemini-yolo/pro`
+- `with-gemini-yolo/flash`
+- `with-gemini-yolo/flash-lite`
 
 The Gemini models above are Gemini CLI aliases exposed directly through the local provider.
+The `with-gemini-yolo/*` variants are the YOLO-approval Gemini route aliases for write-enabled Gemini execution paths.
 
 ### Workflow subagents
 
@@ -155,6 +160,7 @@ It connects:
 
 - the `with-claude` provider
 - the `with-gemini` provider
+- the `with-gemini-yolo` provider
 - the bundled workflow subagents
 
 ### `XDG_CONFIG_HOME/opencode/.opencode/opencode-with-claude.jsonc` or `~/.config/opencode/.opencode/opencode-with-claude.jsonc`
@@ -177,8 +183,8 @@ The simplest way to switch models is to change one value:
 ```jsonc
 {
   "claudeCli": {
-    "defaultModel": "opus"
-  }
+    "defaultModel": "opus",
+  },
 }
 ```
 
@@ -192,10 +198,10 @@ If one role should use a different model, keep the shared default and override o
     "defaultModel": "sonnet",
     "roles": {
       "planClaude": {
-        "model": "opus"
-      }
-    }
-  }
+        "model": "opus",
+      },
+    },
+  },
 }
 ```
 
@@ -208,12 +214,39 @@ The simplest Gemini setup is to choose the shared Gemini alias once:
 ```jsonc
 {
   "geminiCli": {
-    "auto": "flash"
-  }
+    "auto": "flash",
+  },
 }
 ```
 
-That applies the same Gemini CLI alias to `@designGemini` and `@reviewGemini` by default.
+That updates the shared Gemini CLI alias used by the Gemini workflow roles.
+
+By default, the bundled workflow agents do not resolve to the same provider route:
+
+- `@designGemini` defaults to `with-gemini-yolo/auto`
+- `@reviewGemini` defaults to `with-gemini/auto`
+
+This split exists because `@designGemini` is write-enabled by default, while `@reviewGemini` stays on the read-only route by default.
+
+If you need to control that behavior explicitly, use `geminiExecutionPolicy` on the agent config:
+
+```jsonc
+{
+  "agent": {
+    "designGemini": {
+      "geminiExecutionPolicy": "write-enabled",
+    },
+    "reviewGemini": {
+      "geminiExecutionPolicy": "read-only",
+    },
+  },
+}
+```
+
+`geminiExecutionPolicy` accepts:
+
+- `"write-enabled"` - route Gemini-backed execution through the YOLO approval alias (`with-gemini-yolo/*`)
+- `"read-only"` - keep Gemini-backed execution on the standard non-YOLO alias (`with-gemini/*`)
 
 If you want a more specific setup, keep the shared Gemini alias and override only the role that should differ.
 
@@ -223,10 +256,10 @@ If you want a more specific setup, keep the shared Gemini alias and override onl
     "auto": "auto",
     "roles": {
       "reviewGemini": {
-        "model": "pro"
-      }
-    }
-  }
+        "model": "pro",
+      },
+    },
+  },
 }
 ```
 
@@ -234,22 +267,37 @@ This is an advanced override. The default path is to use one shared Gemini alias
 
 ### Example: `oh-my-opencode.json`
 
-If you are also using oh-my-openagent / oh-my-opencode-style agent overrides, point the target agents at the `with-claude/*` models explicitly:
+If you are also using oh-my-openagent / oh-my-opencode-style agent overrides, point the target agents at the provider-backed models explicitly:
 
 ```jsonc
 {
   "agents": {
     "sisyphus": {
-      "model": "with-claude/opus"
+      "model": "with-claude/opus",
     },
     "atlas": {
-      "model": "with-claude/sonnet"
-    }
-  }
+      "model": "with-claude/sonnet",
+    },
+  },
 }
 ```
 
-That works only after the `with-claude` provider is already installed and present in your OpenCode provider config.
+If you want Gemini-backed overrides, use the Gemini routes directly:
+
+```jsonc
+{
+  "categories": {
+    "visual-engineering": {
+      "model": "with-gemini-yolo/pro",
+    },
+    "quick": {
+      "model": "with-gemini/flash",
+    },
+  },
+}
+```
+
+That works only after the relevant providers are already installed and present in your OpenCode provider config.
 
 ## Package surfaces
 
