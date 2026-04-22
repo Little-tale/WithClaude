@@ -233,7 +233,10 @@ function defaultGeminiExecutionPolicy(agentName: string): GeminiExecutionPolicy 
 }
 
 function defaultManagedAgentModel(agentName: string): string | undefined {
-  if (agentName === "designGemini" || agentName === "reviewGemini") {
+  if (agentName === "designGemini") {
+    return "with-gemini-yolo/auto";
+  }
+  if (agentName === "reviewGemini") {
     return "with-gemini/auto";
   }
   if (agentName === "planClaude") {

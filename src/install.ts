@@ -178,7 +178,7 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
         geminiExecutionPolicy: "write-enabled",
         mode: "subagent",
         hidden: false,
-        model: "with-gemini/auto",
+        model: "with-gemini-yolo/auto",
         prompt: runtimeManagedPrompt("designGemini")
       },
       implClaude: {

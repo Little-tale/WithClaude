@@ -32,7 +32,7 @@ test("opencode.jsonc declares workflow providers and binds Claude and Gemini age
   assert.equal(parsed.agent?.planClaude?.model, "with-claude/opus");
   assert.equal(parsed.agent?.implClaude?.model, "with-claude/sonnet");
   assert.equal(parsed.agent?.reviewClaude?.model, "with-claude/sonnet");
-  assert.equal(parsed.agent?.designGemini?.model, "with-gemini/auto");
+  assert.equal(parsed.agent?.designGemini?.model, "with-gemini-yolo/auto");
   assert.equal(parsed.agent?.reviewGemini?.model, "with-gemini/auto");
   assert.equal(parsed.agent?.designGemini?.geminiExecutionPolicy, "write-enabled");
   assert.equal(parsed.agent?.reviewGemini?.geminiExecutionPolicy, "read-only");
