@@ -10,6 +10,15 @@ const originalEnv = { ...process.env };
 
 type PluginToolMap = Record<string, { execute?: (args: Record<string, unknown>, context?: unknown) => Promise<string> }>;
 
+type AgentConfigRecord = {
+  mode?: string;
+  description?: string;
+  prompt?: string;
+  model?: string;
+  geminiExecutionPolicy?: string;
+  tools?: Record<string, boolean>;
+};
+
 async function waitFor(assertion: () => void | Promise<void>, attempts = 20): Promise<void> {
   let lastError: unknown;
   for (let attempt = 0; attempt < attempts; attempt += 1) {
@@ -161,11 +170,13 @@ test("plugin entry exports a default OpenCode plugin with orchestration tools", 
       "save_plan_revision"
     ]);
     assert.equal(typeof hooks.config, "function");
-    const config = {} as { agent?: Record<string, { mode?: string; description?: string; prompt?: string; model?: string; tools?: Record<string, boolean> }> };
+    const config = {} as { agent?: Record<string, AgentConfigRecord> };
     await hooks.config?.(config as never);
     assert.deepEqual(Object.keys(config.agent ?? {}).sort(), ["designGemini", "implClaude", "planClaude", "reviewClaude", "reviewGemini"]);
     assert.equal(config.agent?.designGemini?.mode, "subagent");
     assert.match(config.agent?.designGemini?.description ?? "", /direct-call design agent/);
+    assert.equal(config.agent?.designGemini?.geminiExecutionPolicy, "write-enabled");
+    assert.equal(config.agent?.designGemini?.model, "with-gemini-yolo/auto");
     assert.equal(config.agent?.implClaude?.mode, "subagent");
     assert.match(config.agent?.implClaude?.description ?? "", /implementation executor/);
     assert.match(config.agent?.planClaude?.prompt ?? "", /planning assistant/);
@@ -176,6 +187,8 @@ test("plugin entry exports a default OpenCode plugin with orchestration tools", 
       "run_claude_implementation"
     ]);
     assert.equal(config.agent?.designGemini?.tools, undefined);
+    assert.equal(config.agent?.reviewGemini?.geminiExecutionPolicy, "read-only");
+    assert.equal(config.agent?.reviewGemini?.model, "with-gemini/auto");
     assert.equal(typeof (hooks as { [key: string]: unknown })["session.idle"], "function");
   } finally {
     process.env = { ...originalEnv };
@@ -1132,6 +1145,42 @@ test("session startup skips auto-update when shell runner is unavailable", async
     assert.deepEqual(toastCalls, ["WithClaude Updated"]);
   } finally {
     globalThis.fetch = originalFetch;
+    process.env = { ...originalEnv };
+  }
+});
+
+test("plugin rewrites manual with-gemini agent overrides based on geminiExecutionPolicy", async () => {
+  const projectRoot = await mkdtemp(path.join(os.tmpdir(), "agentwf-plugin-gemini-policy-"));
+  process.env.DATA_DIR = "./data";
+
+  try {
+    const hooks = await plugin({
+      directory: projectRoot,
+      worktree: projectRoot,
+      client: {} as never,
+      project: {} as never,
+      serverUrl: new URL("http://127.0.0.1"),
+      $: {} as never
+    });
+
+    const config = {
+      agent: {
+        visualEngineering: {
+          model: "with-gemini/pro",
+          geminiExecutionPolicy: "write-enabled"
+        },
+        reviewer: {
+          model: "with-gemini-yolo/flash",
+          geminiExecutionPolicy: "read-only"
+        }
+      }
+    } as { agent?: Record<string, AgentConfigRecord> };
+
+    await hooks.config?.(config as never);
+
+    assert.equal(config.agent?.visualEngineering?.model, "with-gemini-yolo/pro");
+    assert.equal(config.agent?.reviewer?.model, "with-gemini/flash");
+  } finally {
     process.env = { ...originalEnv };
   }
 });

@@ -53,3 +53,16 @@ test("default provider factory returns Gemini runtime when name is with-gemini",
   assert.equal(model.provider, "with-gemini");
   assert.ok(!(model instanceof WithClaudeLanguageModel));
 });
+
+test("default provider factory returns Gemini runtime when name is with-gemini-yolo", () => {
+  const provider = createWithClaude({
+    cliPath: "gemini",
+    cwd: process.cwd(),
+    name: "with-gemini-yolo"
+  });
+
+  const model = provider("pro");
+  assert.ok(model instanceof WithGeminiLanguageModel);
+  assert.equal(model.provider, "with-gemini-yolo");
+  assert.ok(!(model instanceof WithClaudeLanguageModel));
+});

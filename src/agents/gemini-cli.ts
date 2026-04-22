@@ -8,9 +8,12 @@ const execFileAsync = promisify(execFile);
 
 export type GeminiCliRole = "designGemini" | "reviewGemini";
 
+export type GeminiExecutionPolicy = "read-only" | "write-enabled";
+
 export type GeminiCliRoleConfig = {
   model?: string;
   args?: string[];
+  executionPolicy?: GeminiExecutionPolicy;
 };
 
 export type GeminiCliConfig = {
@@ -56,6 +59,7 @@ export async function runGeminiCliJson<T>(options: {
   if (roleConfig.args?.length) {
     args.push(...roleConfig.args.map((value) => replaceTemplate(value, options.templates ?? {})));
   }
+  applyExecutionPolicyArgs(args, roleConfig.executionPolicy);
   args.push(options.prompt);
 
   return new Promise<T>((resolve, reject) => {
@@ -113,6 +117,24 @@ export async function runGeminiCliJson<T>(options: {
       }
     });
   });
+}
+
+function applyExecutionPolicyArgs(args: string[], executionPolicy: GeminiExecutionPolicy | undefined): void {
+  if (executionPolicy !== "write-enabled") {
+    return;
+  }
+  if (args.includes("--yolo") || args.includes("-y")) {
+    return;
+  }
+  const approvalModeIndex = args.findIndex((value) => value === "--approval-mode");
+  if (approvalModeIndex >= 0) {
+    return;
+  }
+  const inlineApprovalMode = args.find((value) => value.startsWith("--approval-mode="));
+  if (inlineApprovalMode) {
+    return;
+  }
+  args.push("--approval-mode", "yolo");
 }
 
 export async function runGeminiDesignWithRollback<T>(options: {

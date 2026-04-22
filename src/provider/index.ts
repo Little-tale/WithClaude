@@ -8,6 +8,10 @@ import type { WithClaudeProviderSettings } from "./types.js";
 
 let bootstrappedRuntime = false;
 
+function isGeminiProviderName(providerName: string): boolean {
+  return providerName === "with-gemini" || providerName === "with-gemini-yolo";
+}
+
 function bootstrapPluginRuntimeOnce(): void {
   if (bootstrappedRuntime) {
     return;
@@ -33,11 +37,11 @@ export interface WithGeminiProvider extends ProviderV2 {
 export function createWithClaude(settings: WithClaudeProviderSettings = {}): WithClaudeProvider {
   bootstrapPluginRuntimeOnce();
   const providerName = settings.name ?? "with-claude";
-  const cliPath = settings.cliPath ?? (providerName === "with-gemini" ? (process.env.GEMINI_CLI_PATH ?? "gemini") : (process.env.CLAUDE_CLI_PATH ?? "claude"));
+  const cliPath = settings.cliPath ?? (isGeminiProviderName(providerName) ? (process.env.GEMINI_CLI_PATH ?? "gemini") : (process.env.CLAUDE_CLI_PATH ?? "claude"));
   const cwd = settings.cwd ?? process.cwd();
 
   const createModel = (modelId: string): LanguageModelV2 => {
-    if (providerName === "with-gemini") {
+    if (isGeminiProviderName(providerName)) {
       return new WithGeminiLanguageModel(modelId, {
         provider: providerName,
         cliPath,

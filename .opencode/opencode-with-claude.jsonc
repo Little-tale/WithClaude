@@ -23,8 +23,12 @@
     "timeoutMs": 900000,
     "auto": "auto",
     "roles": {
-      "designGemini": {},
-      "reviewGemini": {}
+      "designGemini": {
+        "executionPolicy": "write-enabled"
+      },
+      "reviewGemini": {
+        "executionPolicy": "read-only"
+      }
     }
   }
 }

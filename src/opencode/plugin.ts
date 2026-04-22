@@ -7,7 +7,8 @@ import {
   runGeminiDesignWithRollback,
   validateGeminiDesignSummary,
   validateGeminiReviewResult,
-  type GeminiCliConfig
+  type GeminiCliConfig,
+  type GeminiExecutionPolicy
 } from "../agents/gemini-cli.js";
 
 import { loadEnv } from "../config/env.js";
@@ -188,6 +189,62 @@ function buildGeminiReviewPrompt(task: WorkflowTask): string {
   ].join("\n");
 }
 
+type AgentExecutionConfig = {
+  description?: string;
+  geminiExecutionPolicy?: GeminiExecutionPolicy;
+  hidden?: boolean;
+  mode?: "subagent" | "primary" | "all";
+  model?: string;
+  prompt?: string;
+  tools?: Record<string, boolean>;
+};
+
+function applyGeminiExecutionPolicies(agentConfig: Record<string, AgentExecutionConfig> | undefined): void {
+  if (!agentConfig) {
+    return;
+  }
+
+  for (const agent of Object.values(agentConfig)) {
+    const model = agent.model;
+    const executionPolicy = agent.geminiExecutionPolicy;
+    if (!model || !executionPolicy) {
+      continue;
+    }
+
+    if (executionPolicy === "write-enabled" && model.startsWith("with-gemini/")) {
+      agent.model = model.replace(/^with-gemini\//, "with-gemini-yolo/");
+      continue;
+    }
+
+    if (executionPolicy === "read-only" && model.startsWith("with-gemini-yolo/")) {
+      agent.model = model.replace(/^with-gemini-yolo\//, "with-gemini/");
+    }
+  }
+}
+
+function defaultGeminiExecutionPolicy(agentName: string): GeminiExecutionPolicy | undefined {
+  if (agentName === "designGemini") {
+    return "write-enabled";
+  }
+  if (agentName === "reviewGemini") {
+    return "read-only";
+  }
+  return undefined;
+}
+
+function defaultManagedAgentModel(agentName: string): string | undefined {
+  if (agentName === "designGemini" || agentName === "reviewGemini") {
+    return "with-gemini/auto";
+  }
+  if (agentName === "planClaude") {
+    return "with-claude/opus";
+  }
+  if (agentName === "implClaude" || agentName === "reviewClaude") {
+    return "with-claude/sonnet";
+  }
+  return undefined;
+}
+
 function resolvePluginEnv(directory: string, worktree: string) {
   const env = loadEnv();
   const projectRoot = worktree || directory;
@@ -203,7 +260,7 @@ const AgentWorkflowPlugin: Plugin = async (input) => {
   const env = resolvePluginEnv(input.directory, input.worktree);
   const host = createOrchestrationHost(env);
   let withClaudeConfig = await loadWithClaudeConfig(env.projectRoot) as {
-    agent?: Record<string, { description?: string; mode?: "subagent" | "primary" | "all"; hidden?: boolean; model?: string; prompt?: string; tools?: Record<string, boolean> }>;
+    agent?: Record<string, { description?: string; geminiExecutionPolicy?: GeminiExecutionPolicy; mode?: "subagent" | "primary" | "all"; hidden?: boolean; model?: string; prompt?: string; tools?: Record<string, boolean> }>;
     claudeCli?: ClaudeCliConfig;
     geminiCli?: GeminiCliConfig;
   };
@@ -228,16 +285,23 @@ const AgentWorkflowPlugin: Plugin = async (input) => {
       config.agent = { ...existing };
       for (const agent of subagents) {
         const override = withClaudeConfig.agent?.[agent.name] ?? {};
+        const existingAgent = (existing[agent.name] ?? {}) as AgentExecutionConfig;
         config.agent[agent.name] = {
-          ...(existing[agent.name] ?? {}),
+          ...existingAgent,
           description: override.description ?? agent.description,
+          ...((override.geminiExecutionPolicy ?? existingAgent.geminiExecutionPolicy ?? defaultGeminiExecutionPolicy(agent.name))
+            ? { geminiExecutionPolicy: override.geminiExecutionPolicy ?? existingAgent.geminiExecutionPolicy ?? defaultGeminiExecutionPolicy(agent.name) }
+            : {}),
           mode: override.mode ?? agent.mode,
           ...(typeof override.hidden === "boolean" ? { hidden: override.hidden } : {}),
-          ...(override.model ? { model: override.model } : {}),
+          ...((override.model ?? existingAgent.model ?? defaultManagedAgentModel(agent.name))
+            ? { model: override.model ?? existingAgent.model ?? defaultManagedAgentModel(agent.name) }
+            : {}),
           prompt: override.prompt ?? agent.prompt,
           ...((override.tools ?? agent.tools) ? { tools: override.tools ?? agent.tools } : {})
         };
       }
+      applyGeminiExecutionPolicies(config.agent as Record<string, AgentExecutionConfig>);
     },
     tool: {
       create_task: tool({

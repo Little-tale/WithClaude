@@ -3,13 +3,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import type { ClaudeCliConfig } from "../agents/claude-cli.js";
-import type { GeminiCliConfig } from "../agents/gemini-cli.js";
+import type { GeminiCliConfig, GeminiExecutionPolicy } from "../agents/gemini-cli.js";
 import { defaultOpenCodeConfigDir } from "./default-config-dir.js";
 
 const packageRoot = path.resolve(fileURLToPath(new URL("../..", import.meta.url)));
 
 export type WithClaudeAgentConfig = {
   description?: string;
+  geminiExecutionPolicy?: GeminiExecutionPolicy;
   mode?: "subagent" | "primary" | "all";
   hidden?: boolean;
   model?: string;

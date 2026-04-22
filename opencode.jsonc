@@ -102,6 +102,64 @@
         "name": "with-gemini",
         "skipPermissions": false
       }
+    },
+    "with-gemini-yolo": {
+      "npm": "file:///Users/gosiphone/Repo/AiAgentUsage/WithClaude/dist/index.js",
+      "models": {
+        "auto": {
+          "name": "WithGemini Auto (YOLO)",
+          "attachment": false,
+          "limit": {
+            "context": 1000000,
+            "output": 16384
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolcall": true
+          }
+        },
+        "pro": {
+          "name": "WithGemini Pro (YOLO)",
+          "attachment": false,
+          "limit": {
+            "context": 1000000,
+            "output": 16384
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolcall": true
+          }
+        },
+        "flash": {
+          "name": "WithGemini Flash (YOLO)",
+          "attachment": false,
+          "limit": {
+            "context": 1000000,
+            "output": 16384
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolcall": true
+          }
+        },
+        "flash-lite": {
+          "name": "WithGemini Flash Lite (YOLO)",
+          "attachment": false,
+          "limit": {
+            "context": 1000000,
+            "output": 16384
+          },
+          "capabilities": {
+            "reasoning": true,
+            "toolcall": true
+          }
+        }
+      },
+      "options": {
+        "cliPath": "gemini",
+        "name": "with-gemini-yolo",
+        "skipPermissions": true
+      }
     }
   },
   // Discovery shim for the @ picker.
@@ -117,6 +175,7 @@
     },
     "designGemini": {
       "description": "Gemini direct-call design agent for frontend styling and component structure work",
+      "geminiExecutionPolicy": "write-enabled",
       "mode": "subagent",
       "hidden": false,
       "model": "with-gemini/auto",
@@ -140,6 +199,7 @@
     },
     "reviewGemini": {
       "description": "Gemini review assistant for implementation verification",
+      "geminiExecutionPolicy": "read-only",
       "mode": "subagent",
       "hidden": false,
       "model": "with-gemini/auto",

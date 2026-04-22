@@ -140,11 +140,42 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
           }
         },
         options: { cliPath: "gemini", name: "with-gemini", skipPermissions: false }
+      },
+      "with-gemini-yolo": {
+        npm: PACKAGE_NAME,
+        models: {
+          auto: {
+            name: "WithGemini Auto (YOLO)",
+            attachment: false,
+            limit: { context: 1000000, output: 16384 },
+            capabilities: { reasoning: true, toolcall: true }
+          },
+          pro: {
+            name: "WithGemini Pro (YOLO)",
+            attachment: false,
+            limit: { context: 1000000, output: 16384 },
+            capabilities: { reasoning: true, toolcall: true }
+          },
+          flash: {
+            name: "WithGemini Flash (YOLO)",
+            attachment: false,
+            limit: { context: 1000000, output: 16384 },
+            capabilities: { reasoning: true, toolcall: true }
+          },
+          "flash-lite": {
+            name: "WithGemini Flash Lite (YOLO)",
+            attachment: false,
+            limit: { context: 1000000, output: 16384 },
+            capabilities: { reasoning: true, toolcall: true }
+          }
+        },
+        options: { cliPath: "gemini", name: "with-gemini-yolo", skipPermissions: true }
       }
     },
     agent: {
       designGemini: {
         description: "Gemini direct-call design agent for frontend styling and component structure work",
+        geminiExecutionPolicy: "write-enabled",
         mode: "subagent",
         hidden: false,
         model: "with-gemini/auto",
@@ -176,6 +207,7 @@ function withClaudePatch(configDir: string): OpenCodeConfig {
       },
       reviewGemini: {
         description: "Gemini review assistant for implementation verification",
+        geminiExecutionPolicy: "read-only",
         mode: "subagent",
         hidden: false,
         model: "with-gemini/auto",
