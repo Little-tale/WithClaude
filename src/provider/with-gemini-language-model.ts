@@ -362,10 +362,18 @@ async function collectGeminiRun(options: { cliPath: string; cwd: string; cliArgs
             parts.push({ kind: "tool-result", id: msg.tool_id, toolName: mapTool(toolCall.name, toolCall.input).name, output: typeof msg.output === "string" ? msg.output : JSON.stringify(msg.output ?? msg.error ?? {}) });
           }
         }
-        if (msg.type === "result") usage = mapGeminiUsage(msg.stats);
         if (msg.type === "result") {
+          usage = mapGeminiUsage(msg.stats);
           sawResult = true;
           resultStatus = typeof msg.status === "string" ? msg.status : undefined;
+          if (settled) return;
+          settled = true;
+          cleanup();
+          if (resultStatus !== "success") {
+            reject(new Error(`Gemini provider CLI reported invalid result status: ${resultStatus ?? "missing"}`));
+            return;
+          }
+          resolve({ parts, usage, sessionId });
         }
       } catch {}
     });

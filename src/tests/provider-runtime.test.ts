@@ -67,7 +67,7 @@ async function writeFakeClaudeScript(mode: "generate" | "generate-hang" | "strea
   return { dir, file };
 }
 
-async function writeFakeGeminiScript(mode: "generate" | "generate-capture-model" | "stream" | "stream-fail" | "generate-no-result" | "generate-failed-result" | "generate-missing-status" | "stream-missing-status" | "stream-no-result-exit-0") {
+async function writeFakeGeminiScript(mode: "generate" | "generate-hang" | "generate-capture-model" | "stream" | "stream-fail" | "generate-no-result" | "generate-failed-result" | "generate-missing-status" | "stream-missing-status" | "stream-no-result-exit-0") {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agentwf-provider-runtime-gemini-"));
   const file = path.join(dir, "fake-gemini.js");
 
@@ -87,6 +87,14 @@ async function writeFakeGeminiScript(mode: "generate" | "generate-capture-model"
     'process.stdout.write(JSON.stringify({ type: "init", session_id: "gemini-session-capture", model }) + "\\n");',
     'process.stdout.write(JSON.stringify({ type: "message", content: model }) + "\\n");',
     'process.stdout.write(JSON.stringify({ type: "result", status: "success", stats: { models: { [model]: { tokens: { prompt: 1, candidates: 1, total: 2 } } } } }) + "\\n");'
+  ].join("\n");
+
+  const generateHangScript = [
+    "#!/usr/bin/env node",
+    'process.stdout.write(JSON.stringify({ type: "init", session_id: "gemini-session-hang", model: "gemini-2.5-pro" }) + "\\n");',
+    'process.stdout.write(JSON.stringify({ type: "message", content: "Hello from hanging Gemini CLI" }) + "\\n");',
+    'process.stdout.write(JSON.stringify({ type: "result", status: "success", stats: { models: { "gemini-2.5-pro": { tokens: { prompt: 4, candidates: 6, total: 10 } } } } }) + "\\n");',
+    'setInterval(() => {}, 1000);'
   ].join("\n");
 
   const streamScript = [
@@ -142,6 +150,8 @@ async function writeFakeGeminiScript(mode: "generate" | "generate-capture-model"
 
   await writeFile(file, mode === "generate"
     ? generateScript
+    : mode === "generate-hang"
+      ? generateHangScript
     : mode === "generate-capture-model"
       ? generateCaptureModelScript
     : mode === "stream"
@@ -444,6 +454,33 @@ test("WithGeminiLanguageModel doGenerate parses stream-json CLI output", async (
   assert.match(JSON.stringify(result.content), /Hello from Gemini CLI/);
   assert.equal(result.usage.outputTokens, 6);
   assert.equal(result.providerMetadata?.["with-gemini"]?.sessionId, "gemini-session-1");
+});
+
+test("WithGeminiLanguageModel doGenerate tears down hanging Gemini process after result", async () => {
+  const { dir, file } = await writeFakeGeminiScript("generate-hang");
+  const model = new WithGeminiLanguageModel("auto", {
+    provider: "with-gemini",
+    cliPath: file,
+    cwd: dir,
+    skipPermissions: false
+  });
+
+  const result = await Promise.race([
+    model.doGenerate({
+      prompt: [{ role: "user", content: "Say hello" }],
+      maxOutputTokens: 200,
+      temperature: 0,
+      topP: 1,
+      topK: 0,
+      providerOptions: {},
+      messages: [] as never,
+      abortSignal: new AbortController().signal,
+      responseFormat: { type: "text" } as never
+    } as never),
+    new Promise<never>((_, reject) => setTimeout(() => reject(new Error("Gemini doGenerate did not resolve after terminal result.")), 500))
+  ]);
+
+  assert.match(JSON.stringify(result.content), /Hello from hanging Gemini CLI/);
 });
 
 test("WithGeminiLanguageModel doGenerate writes Gemini stdout lines to WITH_CLAUDE_DEBUG_STREAM", async () => {
