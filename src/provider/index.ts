@@ -12,6 +12,10 @@ function isGeminiProviderName(providerName: string): boolean {
   return providerName === "with-gemini" || providerName === "with-gemini-yolo";
 }
 
+function defaultGeminiSkipPermissions(providerName: string): boolean {
+  return providerName === "with-gemini-yolo";
+}
+
 function bootstrapPluginRuntimeOnce(): void {
   if (bootstrappedRuntime) {
     return;
@@ -46,7 +50,7 @@ export function createWithClaude(settings: WithClaudeProviderSettings = {}): Wit
         provider: providerName,
         cliPath,
         cwd,
-        skipPermissions: settings.skipPermissions ?? false
+        skipPermissions: settings.skipPermissions ?? defaultGeminiSkipPermissions(providerName)
       });
     }
     return new WithClaudeLanguageModel(modelId, {

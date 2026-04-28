@@ -4,6 +4,7 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 
+import { createWithClaude } from "../provider/index.js";
 import { getActiveProcess, sessionKey } from "../provider/session-manager.js";
 import { WithClaudeLanguageModel } from "../provider/with-claude-language-model.js";
 import { WithGeminiLanguageModel } from "../provider/with-gemini-language-model.js";
@@ -67,7 +68,7 @@ async function writeFakeClaudeScript(mode: "generate" | "generate-hang" | "strea
   return { dir, file };
 }
 
-async function writeFakeGeminiScript(mode: "generate" | "generate-hang" | "generate-capture-model" | "stream" | "stream-fail" | "generate-no-result" | "generate-failed-result" | "generate-missing-status" | "stream-missing-status" | "stream-no-result-exit-0") {
+async function writeFakeGeminiScript(mode: "generate" | "generate-hang" | "generate-capture-model" | "generate-capture-yolo" | "stream" | "stream-fail" | "generate-no-result" | "generate-failed-result" | "generate-missing-status" | "stream-missing-status" | "stream-no-result-exit-0") {
   const dir = await mkdtemp(path.join(os.tmpdir(), "agentwf-provider-runtime-gemini-"));
   const file = path.join(dir, "fake-gemini.js");
 
@@ -87,6 +88,15 @@ async function writeFakeGeminiScript(mode: "generate" | "generate-hang" | "gener
     'process.stdout.write(JSON.stringify({ type: "init", session_id: "gemini-session-capture", model }) + "\\n");',
     'process.stdout.write(JSON.stringify({ type: "message", content: model }) + "\\n");',
     'process.stdout.write(JSON.stringify({ type: "result", status: "success", stats: { models: { [model]: { tokens: { prompt: 1, candidates: 1, total: 2 } } } } }) + "\\n");'
+  ].join("\n");
+
+  const generateCaptureYoloScript = [
+    "#!/usr/bin/env node",
+    'const args = process.argv.slice(2);',
+    'const hasYolo = args.includes("--yolo") || args.includes("-y") || args.includes("--approval-mode=yolo") || (args.includes("--approval-mode") && args[args.indexOf("--approval-mode") + 1] === "yolo");',
+    'process.stdout.write(JSON.stringify({ type: "init", session_id: "gemini-session-capture-yolo", model: "gemini-2.5-pro" }) + "\\n");',
+    'process.stdout.write(JSON.stringify({ type: "message", content: hasYolo ? "yolo-enabled" : "yolo-disabled" }) + "\\n");',
+    'process.stdout.write(JSON.stringify({ type: "result", status: "success", stats: { models: { "gemini-2.5-pro": { tokens: { prompt: 1, candidates: 1, total: 2 } } } } }) + "\\n");'
   ].join("\n");
 
   const generateHangScript = [
@@ -154,6 +164,8 @@ async function writeFakeGeminiScript(mode: "generate" | "generate-hang" | "gener
       ? generateHangScript
     : mode === "generate-capture-model"
       ? generateCaptureModelScript
+    : mode === "generate-capture-yolo"
+      ? generateCaptureYoloScript
     : mode === "stream"
       ? streamScript
       : mode === "stream-fail"
@@ -454,6 +466,30 @@ test("WithGeminiLanguageModel doGenerate parses stream-json CLI output", async (
   assert.match(JSON.stringify(result.content), /Hello from Gemini CLI/);
   assert.equal(result.usage.outputTokens, 6);
   assert.equal(result.providerMetadata?.["with-gemini"]?.sessionId, "gemini-session-1");
+});
+
+test("with-gemini-yolo provider defaults to YOLO approval", async () => {
+  const { dir, file } = await writeFakeGeminiScript("generate-capture-yolo");
+  const provider = createWithClaude({
+    cliPath: file,
+    cwd: dir,
+    name: "with-gemini-yolo"
+  });
+  const model = provider("auto");
+
+  const result = await model.doGenerate({
+    prompt: [{ role: "user", content: "Say hello" }],
+    maxOutputTokens: 200,
+    temperature: 0,
+    topP: 1,
+    topK: 0,
+    providerOptions: {},
+    messages: [] as never,
+    abortSignal: new AbortController().signal,
+    responseFormat: { type: "text" } as never
+  } as never);
+
+  assert.match(JSON.stringify(result.content), /yolo-enabled/);
 });
 
 test("WithGeminiLanguageModel doGenerate tears down hanging Gemini process after result", async () => {
