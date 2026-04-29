@@ -17,6 +17,10 @@ Thanks for helping improve `@little_tale/opencode-with-claude`.
 4. run `npm test`
 5. update docs when behavior or install steps change
 
+For local OpenCode testing against your checkout, run `npm run setup:local-opencode` after `npm run build`. This generates an ignored `opencode.jsonc` with your machine's `file://` path to `dist/index.js`.
+
+Do not commit generated local OpenCode config. The committed config template is `opencode.example.jsonc`, and it must stay portable for other contributors.
+
 ## What this repository ships
 
 This package centers on two install surfaces:
@@ -43,4 +47,5 @@ Before opening a PR, make sure you:
 - explain why the change is needed
 - mention any installer or config migration impact
 - include doc updates for user-visible behavior
+- avoid committing machine-specific paths such as `/Users/<name>/...`
 - confirm `npm test` passes locally
