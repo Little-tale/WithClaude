@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { copyFile, mkdtemp, readFile, realpath } from "node:fs/promises";
+import { mkdtemp, readFile, realpath, writeFile } from "node:fs/promises";
 import { execFile } from "node:child_process";
 import os from "node:os";
 import path from "node:path";
@@ -33,7 +33,17 @@ test("opencode.example.jsonc declares portable provider config and binds Claude 
 
 test("local OpenCode setup script generates checkout-specific file provider config", async () => {
   const tmp = await mkdtemp(path.join(os.tmpdir(), "withclaude-local-opencode-"));
-  await copyFile(path.join(process.cwd(), "opencode.example.jsonc"), path.join(tmp, "opencode.example.jsonc"));
+  const exampleRaw = await readFile(path.join(process.cwd(), "opencode.example.jsonc"), "utf8");
+  const exampleConfig = JSON.parse(stripJsoncComments(exampleRaw)) as {
+    provider?: Record<string, { npm?: string }>;
+  };
+  exampleConfig.provider = {
+    ...(exampleConfig.provider ?? {}),
+    "other-provider": {
+      npm: "some-other-package"
+    }
+  };
+  await writeFile(path.join(tmp, "opencode.example.jsonc"), `${JSON.stringify(exampleConfig, null, 2)}\n`, "utf8");
   await execFileAsync(process.execPath, [
     path.join(process.cwd(), "scripts", "setup-local-opencode.mjs")
   ], { cwd: tmp });
@@ -44,4 +54,5 @@ test("local OpenCode setup script generates checkout-specific file provider conf
   };
   const expectedDistUrl = pathToFileURL(path.join(await realpath(tmp), "dist", "index.js")).href;
   assert.equal(parsed.provider?.["with-claude"]?.npm, expectedDistUrl);
+  assert.equal(parsed.provider?.["other-provider"]?.npm, "some-other-package");
 });
