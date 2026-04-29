@@ -220,11 +220,23 @@ npm run build
 npm test
 ```
 
+The committed OpenCode config is `opencode.example.jsonc`. It stays portable for contributors and uses the published package name instead of a machine-specific `file:///Users/...` path.
+
+For local OpenCode development against this checkout, generate the ignored local config after building:
+
+```bash
+npm run build
+npm run setup:local-opencode
+```
+
+That writes `opencode.jsonc` with provider entries pointing at this checkout's `dist/index.js`.
+
 Useful scripts:
 
 - `npm run dev`
 - `npm run dev:mcp`
 - `npm run build`
+- `npm run setup:local-opencode`
 - `npm test`
 
 ## Automatic npm publishing

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { access, readFile } from "node:fs/promises";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
-import test from "node:test";
+import test, { type TestContext } from "node:test";
 
 type PluginContractFixture = {
   pluginModule: string;
@@ -48,11 +48,28 @@ function resolveOpencodeBinary(): string | null {
   return opencodePath.length > 0 ? opencodePath : null;
 }
 
-test("local OpenCode runtime exposes npm-module plugin installation", async (t) => {
-  const fixture = await loadFixture();
+async function resolveInstalledPluginRoot(t: TestContext, fixture: PluginContractFixture): Promise<string | null> {
   const opencodePath = resolveOpencodeBinary();
   if (!opencodePath) {
     t.skip("opencode binary is not available in PATH for this environment");
+    return null;
+  }
+
+  const nodePrefix = resolveNodeInstallPrefix(opencodePath);
+  const pluginRoot = path.join(nodePrefix, "lib", "node_modules", fixture.pluginModule);
+  try {
+    await access(path.join(pluginRoot, "package.json"));
+    return pluginRoot;
+  } catch {
+    t.skip(`${fixture.pluginModule} is not installed next to the resolved opencode binary`);
+    return null;
+  }
+}
+
+test("local OpenCode runtime exposes npm-module plugin installation", async (t) => {
+  const fixture = await loadFixture();
+  const pluginRoot = await resolveInstalledPluginRoot(t, fixture);
+  if (!pluginRoot) {
     return;
   }
 
@@ -70,8 +87,6 @@ test("local OpenCode runtime exposes npm-module plugin installation", async (t) 
     assert.match(pluginHelpText, new RegExp(snippet.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
   }
 
-  const nodePrefix = resolveNodeInstallPrefix(opencodePath);
-  const pluginRoot = path.join(nodePrefix, "lib", "node_modules", fixture.pluginModule);
   const pluginPackageJson = JSON.parse(await readFile(path.join(pluginRoot, "package.json"), "utf8")) as {
     name?: string;
   };
@@ -85,14 +100,11 @@ test("local OpenCode runtime exposes npm-module plugin installation", async (t) 
 
 test("unsupported local plugin seam is detected when required artifact is missing", async (t) => {
   const fixture = await loadFixture();
-  const opencodePath = resolveOpencodeBinary();
-  if (!opencodePath) {
-    t.skip("opencode binary is not available in PATH for this environment");
+  const pluginRoot = await resolveInstalledPluginRoot(t, fixture);
+  if (!pluginRoot) {
     return;
   }
 
-  const nodePrefix = resolveNodeInstallPrefix(opencodePath);
-  const pluginRoot = path.join(nodePrefix, "lib", "node_modules", fixture.pluginModule);
   const missingArtifact = path.join(pluginRoot, "dist", "definitely-missing-artifact.js");
 
   await assert.rejects(() => access(missingArtifact));
