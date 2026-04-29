@@ -13,8 +13,10 @@ function stripJsoncComments(value) {
 
 const raw = await readFile(examplePath, "utf8");
 const config = JSON.parse(stripJsoncComments(raw));
+const localProviderNames = ["with-claude"];
 
-for (const provider of Object.values(config.provider ?? {})) {
+for (const providerName of localProviderNames) {
+  const provider = config.provider?.[providerName];
   if (provider && typeof provider === "object" && "npm" in provider) {
     provider.npm = localProviderUrl;
   }
