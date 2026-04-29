@@ -2,7 +2,7 @@
   "$schema": "https://opencode.ai/config.json",
   "provider": {
     "with-claude": {
-      "npm": "file:///Users/jaehyungkim/Desktop/agent-workflow-mvp/dist/index.js",
+      "npm": "@little_tale/opencode-with-claude",
       "models": {
         "haiku": {
           "name": "WithClaude Haiku",
@@ -46,7 +46,8 @@
       }
     }
   },
-  // Discovery shim for the @ picker.
+  // Discovery shim example for the @ picker.
+  // Local development can generate opencode.jsonc with npm run setup:local-opencode.
   // Actual Claude model/tool customization lives in .opencode/opencode-with-claude.jsonc.
   "agent": {
     "implClaude": {
